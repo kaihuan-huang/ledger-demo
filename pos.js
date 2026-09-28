@@ -32,7 +32,7 @@
         { id: "tea", name: "Jasmine tea", menu: "Dinner", price_cents: 400 },
         { id: "soda", name: "Soda", menu: "Dinner", price_cents: 300 },
       ],
-      tables: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ id: i, name: `T${i}`, status: "available", current_order_id: null })),
+      tables: [1, 2, 3, 4, 5, 6, 7, 8].map((i) => ({ id: i, name: `T${i}`, status: "available", current_order_id: null, reservation_code: null })),
       table_sessions: [], orders: [], order_items: [], kds_tickets: [], payments: [],
       cash_drawer_logs: [], guest_requests: [], activity_logs: [], events: [],
     };
@@ -134,11 +134,20 @@
     seat(ctx, tableId, body) {
       const db = ctx.db, table = find(db.tables, tableId);
       if (!table) raise404(`Table ${tableId} not found`);
-      if (table.status !== "available") raise409(`Table ${table.name} is ${table.status}`, "TABLE_OCCUPIED");
-      const session = { id: `ts_${db.table_sessions.length + 1}`, table_id: tableId, party_size: body.party_size || null, is_active: true, created_at: ctx.now, closed_at: null };
+      if (table.status === "reserved" && body.reservation_code !== table.reservation_code) raise409(`Table ${table.name} is reserved for ${table.reservation_code}; pass that reservation_code to seat the party`, "TABLE_OCCUPIED");
+      if (table.status !== "available" && table.status !== "reserved") raise409(`Table ${table.name} is ${table.status}`, "TABLE_OCCUPIED");
+      const session = { id: `ts_${db.table_sessions.length + 1}`, table_id: tableId, party_size: body.party_size || null, reservation_code: body.reservation_code || null, is_active: true, created_at: ctx.now, closed_at: null };
       db.table_sessions.push(session);
-      table.status = "occupied";
-      return [201, { table_session_id: session.id, table_id: tableId, status: table.status }];
+      table.status = "occupied"; table.reservation_code = null;
+      return [201, { table_session_id: session.id, table_id: tableId, status: table.status, reservation_code: session.reservation_code }];
+    },
+    reserve(ctx, tableId, body) {
+      const db = ctx.db, table = find(db.tables, tableId);
+      if (!table) raise404(`Table ${tableId} not found`);
+      if (!body.reservation_code) raise422("reservation_code is required");
+      if (table.status !== "available") raise409(`Table ${table.name} is ${table.status}`, "TABLE_OCCUPIED");
+      table.status = "reserved"; table.reservation_code = body.reservation_code; table.reserved_for = body.time || null;
+      return [200, { table_id: tableId, status: table.status, reservation_code: table.reservation_code }];
     },
     floorStatus(ctx, tableId, body) {
       const db = ctx.db, table = find(db.tables, tableId);
@@ -175,7 +184,7 @@
       const session = db.table_sessions.find((s) => s.table_id === table.id && s.is_active);
       if (!session) raise422(`Table ${table.name} has no active session; seat the party first`);
       if (table.current_order_id) raise409(`Table ${table.name} already has open bill ${table.current_order_id}`, "TABLE_OCCUPIED");
-      const order = { id: nextId(db.orders), table_id: table.id, table_session_id: session.id, status: "open", payment_status: "pending", payment_method: null,
+      const order = { id: nextId(db.orders), table_id: table.id, table_session_id: session.id, reservation_code: session.reservation_code || null, status: "open", payment_status: "pending", payment_method: null,
         subtotal_cents: 0, tax_cents: 0, total_cents: 0, service_tips_cents: 0, paid_total_cents: 0, refunded_total_cents: 0, refund_status: "na",
         is_voided: false, voided_by: null, void_reason: null, order_number: null, server_name: ctx.actor, created_at: ctx.now, closed_at: null, notes: null };
       db.orders.push(order);
@@ -409,6 +418,10 @@
   // ---- routers: validate the shape, name the service, nothing else ----------
   const ROUTES = [
     { m: "POST", re: /^\/tables\/(\d+)\/seat$/, router: "routers/tables.py", service: "TableService.seat", h: (c, p, b) => TableService.seat(c, +p[1], b) },
+    { m: "GET", re: /^\/menu-items$/, router: "routers/menu_items.py", service: "MenuItemService.list (read-only)", h: (c) => [200, { items: c.db.menu_item_instances.map((i) => ({ id: i.id, name: i.name, price_cents: i.price_cents, menu: i.menu })), total: c.db.menu_item_instances.length }] },
+    { m: "GET", re: /^\/tables$/, router: "routers/tables.py", service: "TableService.list (read-only)", h: (c) => [200, { items: c.db.tables.map((t) => ({ id: t.id, name: t.name, status: t.status })), total: c.db.tables.length }] },
+    { m: "GET", re: /^\/orders\/(\d+)$/, router: "routers/orders.py", service: "OrderService.get_order_with_items (read-only)", h: (c, p) => { const b = billOf(c.db, +p[1]); if (!b) raise404(`Order ${p[1]} not found`); return [200, b]; } },
+    { m: "PATCH", re: /^\/tables\/(\d+)\/reserve$/, router: "routers/tables.py", service: "TableService.reserve", h: (c, p, b) => TableService.reserve(c, +p[1], b) },
     { m: "PATCH", re: /^\/tables\/(\d+)\/floor-status$/, router: "routers/tables.py", service: "TableService.set_floor_status", h: (c, p, b) => TableService.floorStatus(c, +p[1], b) },
     { m: "POST", re: /^\/orders$/, router: "routers/orders.py", service: "OrderService.create_order → resolve_menu_item_instance", h: (c, p, b) => OrderService.create(c, b) },
     { m: "PATCH", re: /^\/orders\/(\d+)\/items$/, router: "routers/orders.py", service: "OrderService.update_order_items → resolve_menu_item_instance", h: (c, p, b) => OrderService.addItems(c, +p[1], b) },
@@ -430,24 +443,31 @@
   const MODEL_OF = { menu_item_instances: "MenuItemInstance", tables: "Table", table_sessions: "TableSession", orders: "Order", order_items: "OrderItem", kds_tickets: "KDSTicket",
     payments: "Payment", cash_drawer_logs: "CashDrawerLog", guest_requests: "GuestRequest", activity_logs: "ActivityLog", events: "Event" };
 
-  class Pos {
-    constructor() { this.db = seedDb(); this.tick = 0; this.crashPoint = null; this.log = []; }
-    now() { return new Date(Date.UTC(2026, 8, 14, 18, 2, 0) + this.tick * 90000).toISOString(); }
+  class Service {
+    constructor(name, db, routes, modelOf, bus) {
+      this.name = name; this.db = db; this.routes = routes; this.modelOf = modelOf;
+      this.bus = bus || { tick: 0, log: [] };
+      this.crashPoint = null;
+    }
+    get log() { return this.bus.log; }
+    get tick() { return this.bus.tick; }
+    set tick(v) { this.bus.tick = v; }
+    now() { return new Date(Date.UTC(2026, 8, 14, 18, 2, 0) + this.bus.tick * 90000).toISOString(); }
 
-    request(method, path, body, actor) {
-      body = body || {}; actor = actor || "cashier:mei";
-      this.tick += 1;
-      const route = ROUTES.find((r) => r.m === method && r.re.test(path));
-      const entry = { method, path, body, actor, at: this.now(), ws: [], writes: [], router: route ? route.router : null, service: route ? route.service : null, models: [] };
-      this.log.push(entry);
-      if (!route) { Object.assign(entry, { status: 404, response: { detail: `No route for ${method} ${path}` } }); return entry; }
-      const ctx = { db: this.db, now: entry.at, actor, ws: [], checkpoint: (pt) => { if (this.crashPoint === pt) throw new ProcessDied(pt); } };
+    request(method, path, body, actor, headers) {
+      body = body || {}; actor = actor || "cashier:mei"; headers = headers || {};
+      this.bus.tick += 1;
+      const route = this.routes.find((r) => r.m === method && r.re.test(path));
+      const entry = { service_name: this.name, method, path, body, headers, actor, at: this.now(), ws: [], writes: [], outbound: [], router: route ? route.router : null, service: route ? route.service : null, models: [] };
+      this.bus.log.push(entry);
+      if (!route) { Object.assign(entry, { status: 404, response: { detail: `No route for ${method} ${path}` }, error: true }); return entry; }
+      const ctx = { db: this.db, now: entry.at, actor, headers, ws: [], outbound: [], checkpoint: (pt) => { if (this.crashPoint === pt) throw new ProcessDied(pt); } };
       const before = JSON.stringify(this.db);
       try {
         const [status, response] = withTransaction(this.db, () => route.h(ctx, route.re.exec(path), body));
-        entry.status = status; entry.response = JSON.parse(JSON.stringify(response)); entry.ws = ctx.ws;
+        entry.status = status; entry.response = JSON.parse(JSON.stringify(response)); entry.ws = ctx.ws; entry.outbound = ctx.outbound;
         entry.writes = diff(before, this.db);
-        entry.models = [...new Set(entry.writes.map((w) => MODEL_OF[w.table]))];
+        entry.models = [...new Set(entry.writes.map((w) => this.modelOf[w.table] || w.table))];
       } catch (e) {
         if (e instanceof ApiError) { entry.status = e.status; entry.response = { detail: e.message, code: e.code }; entry.error = true; }
         else if (e instanceof ProcessDied) { entry.status = 0; entry.response = { detail: `Process died ${e.point.replace("_", " ")}. The open transaction was rolled back.` }; entry.crashed = true; }
@@ -456,6 +476,10 @@
       }
       return entry;
     }
+  }
+
+  class Pos extends Service {
+    constructor(bus) { super("POS API", seedDb(), ROUTES, MODEL_OF, bus); }
 
     // The flow before 6de5698: four separate calls from the till, each its own commit.
     legacySettle(orderId, intentId, tenderedCents, crashAfter) {
@@ -503,5 +527,5 @@
     checks() { return invariants(this.db); }
   }
 
-  root.POS = { Pos, money, seedDb, invariants, ApiError, TAX_RATE, SLA_MINUTES };
+  root.POS = { Pos, Service, money, seedDb, invariants, ApiError, raise404, raise409, raise422, withTransaction, diff, TAX_RATE, SLA_MINUTES };
 })(typeof globalThis !== "undefined" ? globalThis : this);

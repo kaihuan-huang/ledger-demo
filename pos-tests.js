@@ -177,6 +177,105 @@
     }],
   ];
 
+  // ---- agents and neighbouring services ----
+  function agentWorld() {
+    const pos = new Pos(), res = new root.RESERVATIONS.Reservations(pos.bus);
+    const guest = { session_id: null, order_id: null, paid_order_id: null, phone: "+14155550100", utm: { source: "google", campaign: "hotpot-sf", gclid: "g1" } };
+    const nalu = new root.NALU.Nalu({ pos, reservations: res, guest: () => guest });
+    return { pos, res, nalu, guest };
+  }
+  const RES_BODY = { guest_name: "Kai", guest_phone: "+14155550100", party_size: 4, reservation_date: "2026-09-14", reservation_time: "20:00", source: "web" };
+  tests.push(
+    ["Reservation API: the same Idempotency-Key replays the same booking and writes nothing; a different payload answers 409", () => {
+      const { res } = agentWorld(), h = { "Idempotency-Key": "k1" };
+      const a = res.request("POST", "/api/v1/reservations", RES_BODY, "guest", h);
+      eq(a.status, 201, "created"); eq(a.outbound.length, 2, "Twilio and Revenue Agent called");
+      const b = res.request("POST", "/api/v1/reservations", RES_BODY, "guest", h);
+      eq(b.status, 200, "replayed"); assert(b.response.replayed, "flagged"); eq(b.response.code, a.response.code, "same code"); eq(rowsWritten(b), 0, "nothing written");
+      const c = res.request("POST", "/api/v1/reservations", { ...RES_BODY, party_size: 5 }, "guest", h);
+      eq(c.status, 409, "mismatch"); eq(c.response.code, "IDEMPOTENCY_MISMATCH", "code");
+      eq(res.request("POST", "/api/v1/reservations", RES_BODY, "guest", {}).status, 422, "key required");
+    }],
+    ["Reservation API: a full slot answers 409, the phone is masked, and the Twilio delivery callback lands", () => {
+      const { res } = agentWorld();
+      const full = res.request("POST", "/api/v1/reservations", { ...RES_BODY, reservation_time: "19:30" }, "guest", { "Idempotency-Key": "k2" });
+      eq(full.status, 409, "full"); eq(full.response.code, "SLOT_FULL", "code");
+      const a = res.request("POST", "/api/v1/reservations", RES_BODY, "guest", { "Idempotency-Key": "k3" });
+      eq(a.response.guest_phone, "+1 415···0100", "masked in the response");
+      assert(JSON.stringify(res.db).indexOf("5550100") === -1, "full number never stored");
+      const sid = res.db.sms_messages[0].sid;
+      eq(res.request("POST", "/webhooks/twilio/status", { MessageSid: sid, MessageStatus: "delivered" }, "twilio").status, 204, "callback");
+      eq(res.db.sms_messages[0].status, "delivered", "delivered");
+      eq(res.request("POST", "/webhooks/twilio/status", { MessageSid: "nope", MessageStatus: "delivered" }, "twilio").status, 404, "unknown sid");
+    }],
+    ["Nalu books only on a bare yes: 'ok' asks again, 'don't confirm' books nothing, 'yes' creates the reservation with an Idempotency-Key", () => {
+      const { nalu, res } = agentWorld();
+      nalu.handle("Table for 4 tonight at 8pm, under Kai");
+      eq(nalu.handle("ok").tools.length, 0, "ok is vague"); eq(res.db.reservations.length, 0, "nothing booked");
+      const no = nalu.handle("don't confirm"); eq(res.db.reservations.length, 0, "still nothing"); assert(no.tools.length === 0, "no call");
+      nalu.handle("Table for 4 tonight at 8pm, under Kai");
+      const y = nalu.handle("yes");
+      eq(y.tools.length, 1, "one tool call"); eq(y.tools[0].entry.status, 201, "created"); assert(y.tools[0].entry.headers["Idempotency-Key"], "key sent");
+      assert(y.reply.includes(res.db.reservations[0].code), "reply carries the real code"); eq(res.db.reservations[0].source, "nalu", "source");
+      eq(nalu.retryLastBooking().response.replayed, true, "a retry replays");
+    }],
+    ["Nalu in Chinese: fields resolved by rules, 好 does not book, 确认 does", () => {
+      const { nalu, res } = agentWorld();
+      nalu.handle("明天晚上七点三个人"); nalu.handle("我叫小王");
+      eq(nalu.handle("好").tools.length, 0, "好 is vague");
+      const y = nalu.handle("确认"); eq(y.tools[0].entry.status, 201, "booked");
+      const r = res.db.reservations[0]; eq(r.party_size, 3, "party"); eq(r.reservation_time, "19:00", "time"); eq(r.reservation_date, "2026-09-15", "date"); eq(r.guest_name, "小王", "name");
+    }],
+    ["Nalu offers other times when the slot is full, and never asks for the phone the guest signed in with", () => {
+      const { nalu, res } = agentWorld();
+      nalu.handle("Table for 2 tonight at 7:30pm, I am Lee");
+      const y = nalu.handle("yes");
+      eq(y.tools[0].entry.status, 409, "full"); assert(/full/i.test(y.reply) && y.reply.includes("20:00"), "offers open times"); eq(res.db.reservations.length, 0, "nothing booked");
+      nalu.handle("8pm"); eq(nalu.handle("yes").tools[0].entry.status, 201, "booked at the new time");
+    }],
+    ["Nalu can read the POS but its only POS writes are guest requests; a refund moves money only when a manager approves it", () => {
+      const w = agentWorld(), { pos, nalu, guest } = w;
+      pos.request("POST", "/tables/3/seat", { party_size: 2 });
+      const o = pos.request("POST", "/orders", { table_id: 3, items: [{ instance_id: "noodles", qty: 1 }, { instance_id: "tea", qty: 2 }] }).response;
+      guest.session_id = "ts_1"; guest.order_id = o.id;
+      nalu.handle("What's on the menu?"); nalu.handle("How much is my bill?"); nalu.handle("call a server please");
+      const i = pos.request("POST", "/payments/intent", { order_id: o.id, payment_method: "card", tip_cents: 200 }).response;
+      pos.request("POST", `/orders/${o.id}/settle`, { payment_intent_id: i.payment_intent_id });
+      guest.order_id = null; guest.paid_order_id = o.id;
+      const r = nalu.handle("my noodles were cold, refund please");
+      assert(/nothing has been refunded/i.test(r.reply), "no false claim");
+      eq(nalu.proposals[0].status, "queued", "queued"); eq(nalu.proposals[0].amount_cents, 900, "line price");
+      const naluCalls = pos.log.filter((e) => e.actor === "nalu" && e.service_name === "POS API");
+      assert(naluCalls.every((e) => e.method === "GET" || e.path === "/customer/guest-requests"), "read-only plus guest requests");
+      eq(pos.bill(o.id).refunded_total_cents, 0, "no money moved yet");
+      const e = nalu.approve(1, "manager:raj");
+      eq(e.status, 200, "refund endpoint"); eq(e.actor, "manager:raj", "as the manager"); eq(pos.bill(o.id).refunded_total_cents, 900, "money moved");
+      eq(nalu.proposals[0].status, "refunded", "status"); assert(nalu.turns[nalu.turns.length - 1].reply.includes("$9.00"), "guest told");
+      eq(nalu.approve(1, "manager:raj"), null, "cannot approve twice");
+    }],
+    ["A refund proposal above what is refundable is blocked before any request, and a blocked proposal cannot be approved", () => {
+      const { pos, nalu, guest } = agentWorld();
+      pos.request("POST", "/tables/3/seat", { party_size: 2 });
+      const o = pos.request("POST", "/orders", { table_id: 3, items: [{ instance_id: "tea", qty: 1 }] }).response;
+      const i = pos.request("POST", "/payments/intent", { order_id: o.id, payment_method: "cash", tip_cents: 0 }).response;
+      pos.request("POST", `/orders/${o.id}/settle`, { payment_intent_id: i.payment_intent_id, amount_tendered_cents: 1000 });
+      guest.paid_order_id = o.id;
+      const r = nalu.handle("refund me $500");
+      eq(nalu.proposals[0].status, "blocked", "blocked"); assert(/can't request/i.test(r.reply), "told why");
+      const before = pos.log.length; eq(nalu.approve(1, "manager:raj"), null, "no approval"); eq(pos.log.length, before, "no request made");
+      eq(nalu.handle("refund the tea").proposals, undefined, "handle returns a turn");
+      assert(nalu.proposals[1] && nalu.proposals[1].status === "queued", "a valid one queues");
+    }],
+    ["A reserved table needs the reservation code to seat, and the bill carries it", () => {
+      const pos = new Pos();
+      eq(pos.request("PATCH", "/tables/6/reserve", { reservation_code: "IPOT-1", time: "20:00" }).status, 200, "reserved");
+      const r = pos.request("POST", "/tables/6/seat", { party_size: 4 }); eq(r.status, 409, "no code"); eq(r.response.code, "TABLE_OCCUPIED", "code");
+      eq(pos.request("POST", "/tables/6/seat", { party_size: 4, reservation_code: "IPOT-1" }).status, 201, "with code");
+      const o = pos.request("POST", "/orders", { table_id: 6, items: [{ instance_id: "tea", qty: 1 }] }).response;
+      eq(o.reservation_code, "IPOT-1", "order carries the code"); eq(pos.db.tables.find((t) => t.id === 6).reservation_code, null, "cleared on the table");
+    }],
+  );
+
   function run() {
     return tests.map(([name, fn]) => { try { fn(); return { name, pass: true }; } catch (e) { return { name, pass: false, error: e.message }; } });
   }

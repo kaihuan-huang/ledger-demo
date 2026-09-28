@@ -149,6 +149,27 @@ td.mono{font-family:var(--mono);font-size:.76rem}
 .tr .rows{font-size:.78rem;font-family:var(--mono);margin-top:6px}
 .tr .rows div{padding:2px 0;border-top:1px dashed var(--line)}
 .tr.new summary{background:var(--accent-bg)}
+.tshape.reserved{background:#3B2A5E;border-color:#A78BFA}
+.svc{font-size:.68rem;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--muted)}
+.svc.res{color:#7C3AED;border-color:#A78BFA}
+.nalu{display:grid;grid-template-columns:380px minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:900px){.nalu{grid-template-columns:minmax(0,1fr)}}
+.chat{background:#F7F8FA;color:#16191A;border:8px solid #22262E;border-radius:30px;padding:12px;font-size:.84rem;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.18);display:flex;flex-direction:column;min-height:520px;transition:box-shadow .3s}
+.chat.active{box-shadow:0 0 0 3px var(--accent),0 8px 24px rgba(0,0,0,.18)}
+.chat .ch{font-weight:700;font-size:.95rem}.chat .cs{color:#5F686B;font-size:.74rem;margin-bottom:8px}
+.chat .msgs{flex:1;overflow:auto;max-height:420px;display:flex;flex-direction:column;gap:6px;padding:4px 0}
+.msg{max-width:88%;padding:7px 10px;border-radius:14px;white-space:pre-wrap}
+.msg.u{align-self:flex-end;background:#0B5CAD;color:#fff;border-bottom-right-radius:4px}
+.msg.a{align-self:flex-start;background:#fff;border:1px solid #E3E6EA;border-bottom-left-radius:4px}
+.msg.n{align-self:center;background:#FFF4D6;color:#8A5A00;font-size:.76rem;border-radius:8px}
+.msg small{display:block;color:#5F686B;font-size:.7rem;margin-top:3px;font-family:var(--mono)}
+.chat form{display:flex;gap:6px;margin-top:8px}
+.chat input{flex:1;background:#fff;border:1px solid #D5DAE0;border-radius:10px;padding:8px 10px;color:#16191A}
+.chat form button{background:#0B5CAD;color:#fff;border:none;border-radius:10px;padding:8px 12px;font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chips button{font-size:.74rem;padding:3px 9px;border-radius:999px;background:#fff;border:1px solid #D5DAE0;color:#16191A}
+.kv{font-size:.84rem}.kv div{display:flex;gap:10px;padding:3px 0;border-bottom:1px dashed var(--line)}.kv div span:first-child{color:var(--muted);min-width:110px}
+.ep td:nth-child(2){white-space:nowrap}
 footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted)}
 </style>
 </head>
@@ -162,7 +183,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
 
   <section aria-labelledby="run">
     <h2 id="run">1. Run the restaurant</h2>
-    <p class="muted">Play the tour, or drive it yourself: tap a table, build the order, send it to the kitchen, take payment, refund a line, void a bill. The guest phone is on the seated table; the kitchen screen gets its tickets over WebSocket.</p>
+    <p class="muted">Play the tour, or drive it yourself: tap a table, build the order, send it to the kitchen, take payment, refund a line, void a bill. The guest phone is on the selected table and signed in by phone number; the kitchen screen gets its tickets over WebSocket. The Bookings tab shows what the Reservation API holds; the Requests tab shows guest requests and Nalu's refund proposals.</p>
     <div class="tourbar"><button type="button" class="primary" id="tour">Play the 40-second tour</button><button type="button" id="stopTour" hidden>Stop</button><button type="button" id="resetPos">Reset the shift</button><span class="caption" id="caption"></span></div>
     <div class="devices">
       <div class="term" id="term"></div>
@@ -173,16 +194,51 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     <p class="why" style="margin-top:10px" id="checkLine"></p>
   </section>
 
+  <section aria-labelledby="agent">
+    <h2 id="agent">2. Talk to Nalu, the guest assistant</h2>
+    <p class="muted">Nalu is the bilingual (EN / 中文) assistant at the edge of the platform. Rules classify the intent and read every field; the booking runs only after a bare “yes”; every tool is an HTTP request into the POS (read-only) or the Reservation API, with an <code>Idempotency-Key</code> on the write. A refund is a proposal until a manager approves it on the terminal. This page makes zero model calls, which is exactly the production booking path: the model proposes, the code decides.</p>
+    <div class="tourbar"><button type="button" class="primary" id="tour2">Play the agent tour</button><button type="button" id="stopTour2" hidden>Stop</button><span class="caption" id="caption2"></span></div>
+    <div class="nalu">
+      <div class="chat" id="chat"></div>
+      <div>
+        <div class="card" id="agentState"></div>
+        <div class="card" style="margin-top:12px"><h4>What the agent may and may not do</h4>
+          <ul class="plain" style="margin:0;padding-left:18px;font-size:.88rem">
+            <li><b>Read the POS:</b> <code>GET /menu-items</code>, <code>GET /orders/{id}</code>. No ORM import, no write methods, no guest token stored or sent to inference.</li>
+            <li><b>Write the POS once:</b> <code>POST /customer/guest-requests</code>, the same public endpoint the QR app uses, keyed by the table session.</li>
+            <li><b>Book through the Reservation API:</b> <code>POST /api/v1/reservations</code> with an <code>Idempotency-Key</code>, after a bare yes. A full slot comes back 409 and the agent offers open times.</li>
+            <li><b>Propose a refund, never move money:</b> the proposal passes the same checks the refund endpoint applies, then waits on the terminal's Requests tab. Over $50 needs a manager.</li>
+            <li><b>Never overclaim:</b> replies about refunds and bookings are fixed templates; the code, not the model, decides what the reply may say.</li>
+          </ul></div>
+      </div>
+    </div>
+  </section>
+
   <section aria-labelledby="map">
-    <h2 id="map">2. The platform</h2>
+    <h2 id="map">3. The platform</h2>
     <p class="muted">Five clients, one FastAPI service in three layers, one PostgreSQL, and two neighbouring services with a hard boundary. Click a box to see what it does and which parts I built.</p>
     <div class="diagram" id="diagram"></div>
     <div class="legend"><span><i></i>I built or led</span><span><i class="part"></i>Team-built; I added parts or the contract</span><span><i class="team"></i>Team-built; I integrated with it</span></div>
     <div class="card" id="nodeDetail" style="margin-top:12px"><h3>Pick a box</h3><p class="why" style="margin:0">Routers validate input and shape responses. Services hold every business rule and own the transaction. Models are SQLAlchemy tables migrated with Alembic. Nothing below that line is reachable from a router.</p></div>
+    <h3 style="margin-top:22px">The entry points</h3>
+    <p class="muted">Every way something outside the POS gets in or out, what guards it, and where this page shows it. “Show me” runs the real request in the trace.</p>
+    <div class="tbl"><table class="ep">
+      <thead><tr><th>Entry point</th><th>Direction</th><th>Guard</th><th>On this page</th></tr></thead>
+      <tbody>
+        <tr><td>Guest QR app → POS guest requests</td><td>public POST</td><td>keyed by table session only; dedupe; 3-minute SLA</td><td>Phone “Call a server” <button type="button" data-show="dedupe">Show me: tap twice</button></td></tr>
+        <tr><td>Nalu → POS</td><td>read-only GET</td><td>no ORM, no write methods, no stored guest token</td><td>“What's on the menu?”, “How much is my bill?”</td></tr>
+        <tr><td>Nalu → Reservation API</td><td>POST with Idempotency-Key</td><td>bare-yes gate; same key + same payload replays, different payload 409</td><td>Book a table, then <button type="button" data-show="retry">Show me: the phone retries</button></td></tr>
+        <tr><td>Reservation API → Twilio</td><td>outbound SMS + status webhook</td><td>OTP via Verify; templates only; delivery status by callback, never guessed</td><td><button type="button" data-show="twilio">Show me: delivery callback</button></td></tr>
+        <tr><td>Reservation API → Revenue Agent</td><td>outbound callback</td><td>UTM and click ids on the booking; the booking never waits on marketing</td><td>Appears on every booking as an outbound call in the trace</td></tr>
+        <tr><td>Reservation → POS floor</td><td>staff action</td><td>a reserved table seats only with its reservation code; the bill carries the code</td><td>Terminal “Bookings” tab: confirm, reserve a table, seat the party</td></tr>
+        <tr><td>Nalu refund proposal → POS refund</td><td>manager approval</td><td>same checks as the endpoint; approval is the only path that moves money</td><td>Terminal “Requests” tab</td></tr>
+        <tr><td>Kitchen display, iOS station</td><td>WebSocket rooms; API contract</td><td>tickets numbered by the API; contract doc answers the station's asks</td><td>Kitchen device; platform map</td></tr>
+      </tbody>
+    </table></div>
   </section>
 
   <section aria-labelledby="atomic">
-    <h2 id="atomic">3. Settlement: four calls, or one transaction</h2>
+    <h2 id="atomic">4. Settlement: four calls, or one transaction</h2>
     <p class="muted">Before my change, the till settled a bill with four requests: capture the payment, close the bill, move the table, write the drawer. Each committed on its own. I replaced them with <code>POST /orders/{id}/settle</code>, which does all four inside one transaction. Pick where the process dies and run both.</p>
     <div class="row">
       <label for="crash">The API process dies</label>
@@ -202,21 +258,21 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
   </section>
 
   <section aria-labelledby="rules">
-    <h2 id="rules">4. Try to break it</h2>
+    <h2 id="rules">5. Try to break it</h2>
     <p class="muted">Each button runs against a fresh, fully settled shift. The service answers with the status code and error code the real API uses, and the transaction is rolled back.</p>
     <div class="row" id="ruleButtons"></div>
     <div id="ruleOut"></div>
   </section>
 
   <section aria-labelledby="tests">
-    <h2 id="tests">5. Tests</h2>
-    <p class="muted">Money rules, price snapshots, kitchen rounds, guest requests and the crash behaviour of settlement, run in your browser against the code on this page.</p>
+    <h2 id="tests">6. Tests</h2>
+    <p class="muted">Money rules, price snapshots, kitchen rounds, guest requests, the crash behaviour of settlement, the Reservation API's idempotency and callbacks, and Nalu's gates, run in your browser against the code on this page.</p>
     <div class="row"><button type="button" class="primary" id="runTests">Run the tests</button><span class="muted" id="testSummary"></span></div>
     <ul class="log" id="testOut"></ul>
   </section>
 
   <section aria-labelledby="who">
-    <h2 id="who">6. Who built what</h2>
+    <h2 id="who">7. Who built what</h2>
     <p class="muted">The platform is a team effort. Commit hashes are in the IPOT repositories; the demo reimplements the behaviour, not the code.</p>
     <div class="tbl"><table>
       <thead><tr><th>Area</th><th>Mine</th><th>Team</th></tr></thead>
@@ -238,6 +294,9 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
 </main>
 
 <script src="pos.js"></script>
+<script src="reservations.js"></script>
+<script src="booking-agent.js"></script>
+<script src="nalu.js"></script>
 <script src="pos-tests.js"></script>
 <script>
 (function () {
@@ -252,9 +311,18 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
   const CATS = { Sets: ["beef", "lamb"], Sides: ["veg", "noodles"], Drinks: ["tea", "soda"] };
   const VOID_REASONS = ["guests left before the food", "duplicate bill", "entered on the wrong table"];
   const REFUND_REASONS = ["item arrived cold", "wrong dish served", "guest complaint"];
-  let pos, sel, tab, cat, cart, pay, refund, voidReason, traceSeen, tourRunning = false;
+  const GUEST_PHONE = "+14155550100", GUEST_UTM = { source: "google", campaign: "hotpot-sf", gclid: "CjJ7x" };
+  let pos, res, nalu, sel, tab, cat, cart, pay, refund, voidReason, traceSeen, tourRunning = false;
+  function guestCtx() {
+    const t = phoneTable();
+    if (!t) return { session_id: null, table_id: null, order_id: null, paid_order_id: null, phone: GUEST_PHONE, utm: GUEST_UTM };
+    const ss = pos.db.table_sessions.filter((x) => x.table_id === t.id), s = ss[ss.length - 1];
+    const open = openOrder(t), paid = pos.db.orders.filter((o) => o.table_id === t.id && o.status === "closed" && s && o.table_session_id === s.id).pop();
+    return { session_id: s && s.is_active ? s.id : null, table_id: t.id, order_id: open ? open.id : null, paid_order_id: paid ? paid.id : null, phone: GUEST_PHONE, utm: GUEST_UTM };
+  }
   function resetState() {
-    pos = new Pos(); sel = null; tab = "tables"; cat = "Sets"; cart = {}; traceSeen = 0;
+    pos = new Pos(); res = new RESERVATIONS.Reservations(pos.bus); nalu = new NALU.Nalu({ pos, reservations: res, guest: guestCtx });
+    sel = null; tab = "tables"; cat = "Sets"; cart = {}; traceSeen = 0;
     pay = { method: "cash", tipPct: 18, tipCustom: null, tendered: null };
     refund = { amount: "", reason: REFUND_REASONS[0] }; voidReason = VOID_REASONS[0];
     $("traceList").innerHTML = '<p class="why" style="padding:12px 14px;margin:0">Nothing yet. Tap a table on the cashier terminal.</p>';
@@ -274,7 +342,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     return e;
   }
   function flash(which) {
-    for (const id of ["term", "kds", "phone"]) $(id).classList.toggle("active", id === which);
+    for (const id of ["term", "kds", "phone", "chat"]) $(id).classList.toggle("active", id === which);
   }
 
   // ---- cashier terminal ----
@@ -287,12 +355,14 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     const o = t ? openOrder(t) : null;
     const last = t ? lastOrder(t) : null;
     const openReqs = pos.db.guest_requests.filter((r) => ["open", "acked"].includes(r.status)).length;
-    const tabs = [["tables", "Tables"], ["order", "Order"], ["pay", "Pay"], ["requests", `Requests${openReqs ? `<span class="n">${openReqs}</span>` : ""}`], ["manager", "Manager"]];
+    const openProps = nalu.proposals.filter((x) => x.status === "queued").length, pendingRes = res.db.reservations.filter((r) => r.status === "pending").length;
+    const tabs = [["tables", "Tables"], ["order", "Order"], ["pay", "Pay"], ["requests", `Requests${openReqs + openProps ? `<span class="n">${openReqs + openProps}</span>` : ""}`], ["bookings", `Bookings${pendingRes ? `<span class="n">${pendingRes}</span>` : ""}`], ["manager", "Manager"]];
     let left = "", ticket = "";
     if (tab === "tables") {
-      left = `<div class="floor">${pos.db.tables.map((x) => { const s = session(x); return `<div class="tshape ${x.status}${x.id === sel ? " sel" : ""}" data-t="${x.id}" role="button" tabindex="0">${esc(x.name)}<small>${x.status === "available" ? "free" : x.status === "dirty" ? "needs cleaning" : `${s && s.party_size ? s.party_size + " guests" : "seated"}${x.current_order_id ? " · bill " + x.current_order_id : ""}`}</small></div>`; }).join("")}</div>
-        <p class="tlabel" style="margin-top:14px">${t ? esc(t.name) + " selected" : "tap a table"}</p>
+      left = `<div class="floor">${pos.db.tables.map((x) => { const s = session(x); return `<div class="tshape ${x.status}${x.id === sel ? " sel" : ""}" data-t="${x.id}" role="button" tabindex="0">${esc(x.name)}<small>${x.status === "available" ? "free" : x.status === "dirty" ? "needs cleaning" : x.status === "reserved" ? `${esc(x.reservation_code)}${x.reserved_for ? " · " + x.reserved_for : ""}` : `${s && s.party_size ? s.party_size + " guests" : "seated"}${x.current_order_id ? " · bill " + x.current_order_id : ""}`}</small></div>`; }).join("")}</div>
+        <p class="tlabel" style="margin-top:14px">${t ? esc(t.name) + " selected" + (t.status === "reserved" ? " · reserved " + esc(t.reservation_code) : "") : "tap a table"}</p>
         ${t && t.status === "available" ? `<div class="opts">${[2, 3, 4].map((n) => `<button class="tb sm" data-seat="${n}">Seat ${n}</button>`).join("")}</div>` : ""}
+        ${t && t.status === "reserved" ? (() => { const r = res.db.reservations.find((x) => x.code === t.reservation_code); return `<div class="opts"><button class="tb sm blue" data-seat="${r ? r.party_size : 2}" data-code="${esc(t.reservation_code)}">Seat ${r ? r.guest_name + ", party of " + r.party_size : "the party"} (${esc(t.reservation_code)})</button><button class="tb sm ghost" data-seat="2">Seat a walk-in without the code</button></div>`; })() : ""}
         ${t && t.status === "dirty" ? `<div class="opts"><button class="tb sm green" data-clean="1">Mark ${esc(t.name)} clean</button></div>` : ""}
         ${t && t.status === "occupied" ? `<div class="opts"><button class="tb sm blue" data-tab="order">Open the order</button></div>` : ""}`;
     } else if (tab === "order") {
@@ -324,8 +394,12 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
           ${t.status === "dirty" ? `<p class="tlabel" style="margin-top:14px">table</p><div class="opts"><button class="tb green sm" data-clean="1">Mark ${esc(t.name)} clean</button></div>` : ""}`;
       } else left = `<p class="tlabel">nothing to pay</p><p style="color:var(--t-muted)">Open a bill with at least one line.</p>`;
     } else if (tab === "requests") {
-      const rs = pos.db.guest_requests.slice().reverse();
-      left = `<p class="tlabel">guest requests · red after ${POS.SLA_MINUTES} min</p>` + (rs.length ? rs.map((r) => `<div class="opts" style="align-items:center"><span style="min-width:150px"><b>T${r.table_id}</b> · ${esc(r.request_type)} <span style="color:${r.status === "resolved" ? "var(--t-green)" : "var(--t-amber)"}">${esc(r.status)}</span><br><small style="color:var(--t-muted)">due ${r.sla_due_at.slice(11, 16)}</small></span>${r.status === "open" ? `<button class="tb sm" data-ack="${r.id}">Acknowledge</button>` : ""}${["open", "acked"].includes(r.status) ? `<button class="tb sm green" data-resolve="${r.id}">Resolve</button>` : ""}</div>`).join("") : `<p style="color:var(--t-muted)">None. The guest phone can raise one.</p>`);
+      const rs = pos.db.guest_requests.slice().reverse(), ps = nalu.proposals.slice().reverse();
+      left = `<p class="tlabel">guest requests · red after ${POS.SLA_MINUTES} min</p>` + (rs.length ? rs.map((r) => `<div class="opts" style="align-items:center"><span style="min-width:150px"><b>T${r.table_id}</b> · ${esc(r.request_type)} <span style="color:${r.status === "resolved" ? "var(--t-green)" : "var(--t-amber)"}">${esc(r.status)}</span><br><small style="color:var(--t-muted)">due ${r.sla_due_at.slice(11, 16)}</small></span>${r.status === "open" ? `<button class="tb sm" data-ack="${r.id}">Acknowledge</button>` : ""}${["open", "acked"].includes(r.status) ? `<button class="tb sm green" data-resolve="${r.id}">Resolve</button>` : ""}</div>`).join("") : `<p style="color:var(--t-muted)">None. The guest phone or Nalu can raise one.</p>`)
+        + `<p class="tlabel" style="margin-top:14px">refund proposals from Nalu · manager Raj</p>` + (ps.length ? ps.map((x) => `<div class="opts" style="align-items:center"><span style="min-width:200px"><b>T${x.table_id}</b> · bill ${x.order_id} · <b>${money(x.amount_cents)}</b> <span style="color:${x.status === "refunded" ? "var(--t-green)" : x.status === "queued" ? "var(--t-amber)" : "var(--t-red)"}">${esc(x.status)}</span><br><small style="color:var(--t-muted)">“${esc(x.reason)}”${x.flags.length ? " · " + esc(x.flags.join("; ")) : ""}${x.blocked_reason ? " · " + esc(x.blocked_reason) : ""}${x.needsManager ? " · over $50" : ""}</small></span>${x.status === "queued" ? `<button class="tb sm green" data-approve="${x.id}">Approve</button><button class="tb sm red" data-reject="${x.id}">Decline</button>` : ""}</div>`).join("") : `<p style="color:var(--t-muted)">None. Ask Nalu for a refund on a paid bill.</p>`);
+    } else if (tab === "bookings") {
+      const rs = res.db.reservations.slice().reverse(), free = pos.db.tables.filter((x) => x.status === "available");
+      left = `<p class="tlabel">reservation api · host Ana</p>` + (rs.length ? rs.map((r) => `<div class="opts" style="align-items:center"><span style="min-width:210px"><b>${esc(r.code)}</b> · ${esc(r.guest_name)} · ${r.party_size} · ${r.reservation_date.slice(5)} ${r.reservation_time} <span style="color:${r.status === "confirmed" ? "var(--t-green)" : r.status === "pending" ? "var(--t-amber)" : "var(--t-red)"}">${esc(r.status)}</span><br><small style="color:var(--t-muted)">${esc(r.guest_phone)} · via ${esc(r.source)}${r.utm_source ? " · " + esc(r.utm_source) : ""} · SMS ${esc((res.db.sms_messages.find((m) => m.reservation_code === r.code) || { status: "none" }).status)}</small></span>${r.status === "pending" ? `<button class="tb sm green" data-confirm="${esc(r.code)}">Confirm</button>` : ""}${r.status === "confirmed" && !pos.db.tables.some((x) => x.reservation_code === r.code) && free.length ? `<select data-resv="${esc(r.code)}" data-time="${r.reservation_time}"><option value="">Reserve a table…</option>${free.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select>` : ""}${r.status !== "cancelled" ? `<button class="tb sm red" data-cancelres="${esc(r.code)}">Cancel</button>` : ""}</div>`).join("") : `<p style="color:var(--t-muted)">No bookings yet. Ask Nalu for a table.</p>`);
     } else if (tab === "manager") {
       left = `<p class="tlabel">menu prices · manager Raj</p>` + pos.db.menu_item_instances.map((it) => `<div class="opts" style="align-items:center"><span style="min-width:150px">${esc(it.name)} <b>${money(it.price_cents)}</b></span><button class="tb sm" data-price="${it.id}:${it.price_cents - 100}">−$1</button><button class="tb sm" data-price="${it.id}:${it.price_cents + 400}">+$4</button></div>`).join("") + `<p style="color:var(--t-muted);font-size:.76rem;margin-top:8px">Changing a price changes the menu. Lines already on a bill keep the price the cashier saw.</p>`;
     }
@@ -351,14 +425,19 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
 
   // ---- guest phone ----
   function phoneTable() {
-    if (sel && table(sel).status === "occupied") return table(sel);
+    if (sel && pos.db.table_sessions.some((x) => x.table_id === sel)) return table(sel);
     return pos.db.tables.find((t) => t.status === "occupied") || null;
   }
   function renderPhone() {
-    const t = phoneTable(), s = t ? session(t) : null, o = t ? openOrder(t) : null;
-    if (!t || !s) { $("phone").innerHTML = `<div class="ph">IPOT</div><div class="ps">Scan the QR code on your table</div><div class="pcard" style="color:#5F686B">No table seated yet.</div>`; return; }
+    const t = phoneTable(), s = t ? session(t) : null, o = t ? openOrder(t) : null, g = guestCtx();
+    const signed = `<div class="ps">Signed in · ${esc(RESERVATIONS.mask(GUEST_PHONE))} via Twilio Verify</div>`;
+    if (!t || !s) {
+      const paid = g.paid_order_id ? pos.bill(g.paid_order_id) : null;
+      $("phone").innerHTML = `<div class="ph">${t ? esc(t.name) + " · " : ""}IPOT</div>${signed}${paid ? `<div class="pcard"><b>Your bill is paid</b><div class="req"><span>${esc(paid.payment_method)} · bill #${esc(paid.order_number)}</span><span>${money(paid.paid_total_cents + paid.service_tips_cents)}</span></div>${paid.refunded_total_cents ? `<div class="req"><span>refunded</span><span>−${money(paid.refunded_total_cents)}</span></div>` : ""}<div style="color:#5F686B;font-size:.76rem;margin-top:4px">Something wrong? Tell Nalu below; a manager decides.</div></div>` : `<div class="pcard" style="color:#5F686B">Scan the QR code on your table, or ask Nalu below for a booking.</div>`}`;
+      return;
+    }
     const reqs = pos.db.guest_requests.filter((r) => r.table_session_id === s.id);
-    $("phone").innerHTML = `<div class="ph">${esc(t.name)} · IPOT</div><div class="ps">Party of ${s.party_size} · session ${esc(s.id)}</div>
+    $("phone").innerHTML = `<div class="ph">${esc(t.name)} · IPOT</div>${signed}<div class="ps" style="margin-top:-6px">Party of ${s.party_size} · session ${esc(s.id)}${s.reservation_code ? " · booking " + esc(s.reservation_code) : ""}</div>
       <div class="pcard"><b>Your bill so far</b>${o && o.lines.length ? `<div style="margin-top:4px">${o.lines.map((l) => `<div class="req"><span>${l.quantity}× ${esc(l.name)}</span><span>${money(l.quantity * l.price_cents)}</span></div>`).join("")}<div class="req" style="font-weight:700"><span>Total incl. tax</span><span>${money(o.total_cents)}</span></div></div>` : `<div style="color:#5F686B;margin-top:2px">Nothing ordered yet.</div>`}</div>
       <div class="pcard"><b>Need something?</b><button class="pb" data-req="call">Call a server</button><button class="pb sec" data-req="cash">Bring the bill</button><button class="pb sec" data-req="split">Split the bill</button>
       ${reqs.length ? `<div style="margin-top:8px">${reqs.map((r) => `<div class="req"><span>${esc(r.request_type)}</span><span style="color:${r.status === "resolved" ? "#1E7A45" : "#8A5A00"}">${r.status === "resolved" ? "done" : r.status === "acked" ? "on the way" : "sent"}</span></div>`).join("")}</div>` : ""}</div>`;
@@ -377,20 +456,54 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
       const ws = e.ws.length ? `<p class="why" style="margin:6px 0 0">WebSocket → ${e.ws.map((m) => `<span class="chip">${esc(m.room)}: ${esc(m.message.event)}</span>`).join("")}</p>` : "";
       const d = document.createElement("details");
       d.className = "tr new";
-      d.innerHTML = `<summary><span class="role">${esc(e.role || "api")}</span><span class="m">${esc(e.method)}</span><span class="p">${esc(e.path)}</span><span class="pill ${st}">${e.status === 0 ? "died" : e.status}${e.response && e.response.code ? " · " + esc(e.response.code) : ""}</span><span class="muted" style="font-size:.76rem">${e.writes.length} row${e.writes.length === 1 ? "" : "s"} written${e.ws.length ? " · WebSocket" : ""}</span>${e.status >= 400 ? `<span class="muted" style="font-size:.78rem;flex-basis:100%">${esc(e.response.detail)}</span>` : ""}</summary>
+      const outb = (e.outbound || []).length ? `<p class="why" style="margin:6px 0 0">Outbound → ${e.outbound.map((o) => `<span class="chip">${esc(o.to)}: ${esc(o.what)}</span>`).join("")}</p>` : "";
+      d.innerHTML = `<summary><span class="role">${esc(e.role || String(e.actor || "api").split(":")[0])}</span><span class="svc${e.service_name === "Reservation API" ? " res" : ""}">${esc(e.service_name)}</span><span class="m">${esc(e.method)}</span><span class="p">${esc(e.path)}</span><span class="pill ${st}">${e.status === 0 ? "died" : e.status}${e.status >= 400 && e.response && e.response.code ? " · " + esc(e.response.code) : ""}</span><span class="muted" style="font-size:.76rem">${e.writes.length} row${e.writes.length === 1 ? "" : "s"} written${e.ws.length ? " · WebSocket" : ""}</span>${e.status >= 400 ? `<span class="muted" style="font-size:.78rem;flex-basis:100%">${esc(e.response.detail)}</span>` : ""}</summary>
         <div class="bd"><div class="path"><span class="chip on">${esc(e.router || "no route")}</span><span class="muted">→</span><span class="chip on">${esc(e.service || "—")}</span><span class="muted">→</span>${e.models.length ? e.models.map((m) => `<span class="chip">${esc(m)}</span>`).join("") : '<span class="chip">no model touched</span>'}</div>
-        ${Object.keys(e.body).length ? `<pre>${pretty(e.body)}</pre>` : ""}${e.status < 400 && e.status !== 0 ? `<pre style="margin-top:6px">${pretty(e.response)}</pre>` : ""}${rows}${ws}</div>`;
+        ${Object.keys(e.headers || {}).length ? `<p class="why" style="margin:0 0 4px">headers ${pretty(e.headers)}</p>` : ""}${Object.keys(e.body).length ? `<pre>${pretty(e.body)}</pre>` : ""}${e.status < 400 && e.status !== 0 ? `<pre style="margin-top:6px">${pretty(e.response)}</pre>` : ""}${rows}${ws}${outb}</div>`;
       list.prepend(d);
     }
     traceSeen = pos.log.length;
-    $("traceCount").textContent = `${pos.log.length} request${pos.log.length === 1 ? "" : "s"}`;
+    const nres = pos.log.filter((e) => e.service_name === "Reservation API").length;
+    $("traceCount").textContent = `${pos.log.length} request${pos.log.length === 1 ? "" : "s"}${nres ? ` · ${nres} to the Reservation API` : ""} · 0 model calls`;
     const c = pos.checks(), bad = c.filter((x) => !x.ok).length;
     $("checkLine").innerHTML = c.length ? `${c.length} invariants recomputed from the rows after every request: <span class="pill ${bad ? "bad" : "ok"}">${bad ? bad + " broken" : "all hold"}</span> <span class="muted">(bill totals from price snapshots, tips only from captured payments, refunds never above what was charged, cash drawer equals cash in minus cash out, closed bills fully paid and off their table)</span>` : "";
   }
-  function renderAll() { renderTerm(); renderKDS(); renderPhone(); renderTrace(); }
+  // ---- Nalu chat ----
+  const CHIPS = ["What's on the menu?", "What times are available tonight?", "Table for 4 tonight at 8pm, under Kai", "明天晚上七点三个人，我叫小王", "ok", "yes", "确认", "don't confirm", "How much is my bill?", "Call a server please", "My noodles were cold, refund please", "Cancel my reservation"];
+  function renderChat() {
+    const msgs = nalu.turns.map((t) => `${t.text != null ? `<div class="msg u">${esc(t.text)}</div>` : ""}<div class="msg ${t.intent === "notice" || t.intent === "retry" ? "n" : "a"}">${esc(t.reply)}${t.tools && t.tools.length ? `<small>${t.tools.map((x) => `${x.name} → ${x.entry.service_name === "Reservation API" ? "Reservation" : "POS"} ${x.entry.method} ${x.entry.path.split("?")[0]} ${x.entry.status}`).join(" · ")}</small>` : ""}</div>`).join("");
+    $("chat").innerHTML = `<div class="ch">Nalu · IPOT</div><div class="cs">Guest assistant · EN / 中文 · ${esc(RESERVATIONS.mask(GUEST_PHONE))}</div><div class="msgs" id="msgs">${msgs || '<div class="msg a">Hi! I can help with the menu, opening hours, your bill, calling a server, or booking a table.<br>您好，我可以帮您看菜单、营业时间、账单、叫服务员或订位。</div>'}</div>
+      <form id="chatForm"><input id="chatIn" placeholder="Type in English or 中文…" autocomplete="off"><button type="submit">Send</button></form>
+      <div class="chips">${CHIPS.map((c) => `<button type="button" data-chip="${esc(c)}">${esc(c)}</button>`).join("")}</div>`;
+    const m = $("msgs"); m.scrollTop = m.scrollHeight;
+    const last = nalu.turns[nalu.turns.length - 1], b = nalu.booking, f = b.fields;
+    const fields = ["party", "date", "time", "name"].map((k) => `<div><span>${k}</span><span>${f[k] == null ? '<span class="muted">not given</span>' : esc(f[k])}</span></div>`).join("");
+    const trace = last && last.fields && last.fields.length ? `<p class="why" style="margin:6px 0 0">Read from the last message: ${last.fields.map((x) => `<span class="chip">${esc(x.field)} = ${esc(x.value)} ← “${esc(x.from)}”</span>`).join(" ")}</p>` : "";
+    const props = nalu.proposals.length ? `<h4 style="margin-top:12px">Refund proposals</h4><div class="kv">${nalu.proposals.map((x) => `<div><span>#${x.id} ${money(x.amount_cents)}</span><span><span class="pill ${x.status === "refunded" ? "ok" : x.status === "queued" ? "warn" : "bad"}">${esc(x.status)}</span> ${esc(x.blocked_reason || (x.status === "queued" ? "waiting for a manager on the terminal" : ""))}</span></div>`).join("")}</div>` : "";
+    $("agentState").innerHTML = `<h4>Agent state · deterministic path</h4>
+      <div class="kv"><div><span>last intent</span><span>${last ? `<span class="chip">${esc(last.intent)}</span>` : '<span class="muted">—</span>'}</span></div><div><span>language</span><span>${last ? esc(last.lang) : "—"}</span></div><div><span>booking gate</span><span>${b.awaitingConfirm ? '<span class="pill warn">waiting for a bare yes</span>' : '<span class="muted">closed</span>'}</span></div><div><span>Idempotency-Key</span><span style="font-family:var(--mono);font-size:.78rem">${nalu.idemKey ? esc(nalu.idemKey) : "—"}</span></div><div><span>model calls</span><span>0</span></div></div>
+      <h4 style="margin-top:12px">Booking fields (rules only)</h4><div class="kv">${fields}</div>${trace}${props}`;
+  }
+  function chatSay(text) { if (!text || !text.trim()) return null; flash("chat"); const o = nalu.handle(text.trim()); renderAll(); return o; }
+  $("chat").addEventListener("submit", (ev) => { ev.preventDefault(); const v = $("chatIn").value; chatSay(v); });
+  $("chat").addEventListener("click", (ev) => { const c = ev.target.closest("[data-chip]"); if (c) chatSay(c.dataset.chip); });
+  document.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
+    const k = b.dataset.show;
+    if (k === "retry") { if (!nalu.lastBooking) { chatSay("Table for 4 tonight at 8pm, under Kai"); chatSay("yes"); } flash("chat"); nalu.retryLastBooking(); renderAll(); }
+    else if (k === "twilio") { if (!res.db.sms_messages.length) { chatSay("Table for 4 tonight at 8pm, under Kai"); chatSay("yes"); } twilioDeliver(); }
+    else if (k === "dedupe") { if (!phoneTable() || !session(phoneTable())) { sel = pos.db.tables.find((x) => x.status === "available").id; seat(2); } guestReq("call"); guestReq("call"); }
+    document.getElementById("trace").scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }));
+  function renderAll() { renderTerm(); renderKDS(); renderPhone(); renderChat(); renderTrace(); }
 
   // ---- terminal actions ----
-  function seat(n) { flash("term"); const e = act("cashier", "POST", `/tables/${sel}/seat`, { party_size: n }); if (e.status < 300) { tab = "order"; renderTerm(); } return e; }
+  function seat(n, code) { flash("term"); const body = { party_size: n }; if (code) body.reservation_code = code; const e = act("cashier", "POST", `/tables/${sel}/seat`, body); if (e.status < 300) { tab = "order"; renderTerm(); } return e; }
+  function approveProposal(id) { flash("term"); const e = nalu.approve(id, "manager:raj"); renderAll(); return e; }
+  function rejectProposal(id) { flash("term"); nalu.reject(id, "manager:raj", "declined at the till"); renderAll(); }
+  function confirmBooking(code) { flash("term"); const e = res.request("POST", `/api/v1/admin/reservations/${code}/confirm`, {}, "host:ana"); e.role = "host"; renderAll(); return e; }
+  function cancelBooking(code) { flash("term"); const e = res.request("POST", `/api/v1/reservations/${code}/cancel`, { reason: "cancelled by host" }, "host:ana"); e.role = "host"; renderAll(); return e; }
+  function reserveTable(tableId, code, time) { flash("term"); const e = act("host", "PATCH", `/tables/${tableId}/reserve`, { reservation_code: code, time }, "host:ana"); if (e.status < 300) { tab = "tables"; sel = tableId; renderAll(); } return e; }
+  function twilioDeliver() { const sms = res.db.sms_messages.filter((m) => m.status === "queued").pop(); if (!sms) return null; const e = res.request("POST", "/webhooks/twilio/status", { MessageSid: sms.sid, MessageStatus: "delivered" }, "twilio"); e.role = "twilio"; renderAll(); return e; }
   function addToCart(id) { cart[id] = (cart[id] || 0) + 1; renderTerm(); }
   function commitCart() {
     const items = Object.entries(cart).map(([id, qty]) => ({ instance_id: id, qty }));
@@ -428,12 +541,16 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
   function reqSet(id, status) { flash("term"); return act("cashier", "PATCH", `/guest-requests/${id}`, { status, outcome: "done" }, "server:ana"); }
 
   $("term").addEventListener("click", (ev) => {
-    const b = ev.target.closest("[data-tab],[data-t],[data-seat],[data-clean],[data-cat],[data-add],[data-addcart],[data-clearcart],[data-send],[data-method],[data-tip],[data-tipc],[data-tender],[data-charge],[data-refund],[data-void],[data-ack],[data-resolve],[data-price]");
+    const b = ev.target.closest("[data-tab],[data-t],[data-seat],[data-clean],[data-cat],[data-add],[data-addcart],[data-clearcart],[data-send],[data-method],[data-tip],[data-tipc],[data-tender],[data-charge],[data-refund],[data-void],[data-ack],[data-resolve],[data-price],[data-approve],[data-reject],[data-confirm],[data-cancelres]");
     if (!b) return;
     const d = b.dataset;
     if (d.tab) { tab = d.tab; renderTerm(); }
     else if (d.t) { sel = +d.t; renderAll(); }
-    else if (d.seat) seat(+d.seat);
+    else if (d.seat) seat(+d.seat, d.code || null);
+    else if (d.approve) approveProposal(+d.approve);
+    else if (d.reject) rejectProposal(+d.reject);
+    else if (d.confirm) confirmBooking(d.confirm);
+    else if (d.cancelres) cancelBooking(d.cancelres);
     else if (d.clean) clean();
     else if (d.cat) { cat = d.cat; renderTerm(); }
     else if (d.add) addToCart(d.add);
@@ -451,14 +568,15 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     else if (d.resolve) reqSet(+d.resolve, "resolved");
     else if (d.price) { const [id, c] = d.price.split(":"); setPrice(id, +c); }
   });
+  $("term").addEventListener("change", (ev) => { const sl = ev.target.closest("[data-resv]"); if (sl && sl.value) reserveTable(+sl.value, sl.dataset.resv, sl.dataset.time); });
   $("term").addEventListener("keydown", (ev) => { const b = ev.target.closest("[data-t]"); if (b && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); sel = +b.dataset.t; renderAll(); } });
   $("kds").addEventListener("click", (ev) => { const b = ev.target.closest("[data-kds]"); if (!b) return; const [id, st] = b.dataset.kds.split(":"); kdsSet(+id, st); });
   $("phone").addEventListener("click", (ev) => { const b = ev.target.closest("[data-req]"); if (b) guestReq(b.dataset.req); });
-  $("resetPos").addEventListener("click", () => { stopTour(); resetState(); renderAll(); flash(null); $("caption").textContent = ""; });
+  $("resetPos").addEventListener("click", () => { stopTour(); resetState(); renderAll(); flash(null); $("caption").textContent = ""; $("caption2").textContent = ""; });
 
   // ---- the tour ----
   let tourToken = 0;
-  function stopTour() { tourRunning = false; tourToken += 1; $("tour").hidden = false; $("stopTour").hidden = true; }
+  function stopTour() { tourRunning = false; tourToken += 1; $("tour").hidden = false; $("stopTour").hidden = true; $("tour2").hidden = false; $("stopTour2").hidden = true; }
   async function runTour() {
     resetState(); renderAll();
     tourRunning = true; const token = ++tourToken;
@@ -500,6 +618,40 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     flash(null);
   }
   $("tour").addEventListener("click", runTour);
+  async function runAgentTour() {
+    resetState(); renderAll();
+    tourRunning = true; const token = ++tourToken;
+    $("tour2").hidden = true; $("stopTour2").hidden = false;
+    const say = (s) => { $("caption2").textContent = s; };
+    const step = async (cap, fn, ms) => { if (token !== tourToken) throw new Error("stopped"); say(cap); fn(); await sleep(ms || 1500); };
+    try {
+      await step("A guest asks Nalu about the menu. The answer is grounded on a read-only call to the POS.", () => chatSay("What's on the menu?"));
+      await step("Availability comes from the Reservation API's slot table, not from the model.", () => chatSay("What times are available tonight?"));
+      await step("A booking in one message. Rules read party, date and time; the name is still missing, so Nalu asks.", () => chatSay("Table for 4 tonight at 8pm"));
+      await step("The guest answers in Chinese. Nalu switches language; the fields are the same.", () => chatSay("我叫 Kai"));
+      await step("“ok” is too vague to book on. Nalu asks for a bare yes.", () => chatSay("ok"));
+      await step("Bare yes: one POST to the Reservation API with an Idempotency-Key. Twilio queues the SMS, the Revenue Agent gets the attribution.", () => chatSay("yes"), 2000);
+      await step("The phone's network retries the same request. Same key, same payload: the API replays the booking and writes nothing.", () => { flash("chat"); nalu.retryLastBooking(); renderAll(); }, 1800);
+      await step("Twilio calls back with the delivery status; the API records it rather than guessing.", () => twilioDeliver(), 1500);
+      await step("The host confirms the booking on the terminal's Bookings tab.", () => { tab = "bookings"; renderTerm(); flash("term"); }, 1100);
+      await step("The host confirms the booking on the terminal's Bookings tab.", () => confirmBooking(res.db.reservations[0].code), 1300);
+      await step("The host reserves T6 for it. On the POS floor the table now carries the reservation code.", () => reserveTable(6, res.db.reservations[0].code, res.db.reservations[0].reservation_time), 1500);
+      await step("8 PM: the party arrives. Seating T6 needs the code, and the bill will carry it.", () => seat(4, res.db.reservations[0].code), 1300);
+      await step("They order, the kitchen gets ticket 1-1, and they pay by card.", () => { cart = { noodles: 1, tea: 2 }; commitCart(); }, 900);
+      await step("They order, the kitchen gets ticket 1-1, and they pay by card.", () => send(), 900);
+      await step("They order, the kitchen gets ticket 1-1, and they pay by card.", () => { tab = "pay"; pay = { method: "card", tipPct: 18, tipCustom: null, tendered: null }; renderTerm(); }, 900);
+      await step("They order, the kitchen gets ticket 1-1, and they pay by card.", () => charge(), 1500);
+      await step("The noodles were cold. Nalu reads the paid bill, checks what is refundable, and queues a proposal. No money moves.", () => chatSay("My noodles were cold, refund please"), 2000);
+      await step("A manager sees the proposal on the Requests tab. Approval is the only path that moves money, through the same refund endpoint.", () => { tab = "requests"; renderTerm(); flash("term"); }, 1300);
+      await step("Approved: the refund lands with the manager as approver, and Nalu tells the guest with a fixed template.", () => approveProposal(1), 1800);
+      await step("An unsupported action: Nalu says what it cannot do and gives the real phone number from config, never from the model.", () => chatSay("Cancel my reservation"), 1800);
+      say("Done. Every agent action above is in the trace, tagged POS API or Reservation API, and the model was never called.");
+    } catch (e) { if (e.message !== "stopped") throw e; }
+    if (token === tourToken) { tourRunning = false; $("tour2").hidden = false; $("stopTour2").hidden = true; }
+    flash(null);
+  }
+  $("tour2").addEventListener("click", runAgentTour);
+  $("stopTour2").addEventListener("click", () => { stopTour(); $("caption2").textContent = "Stopped. Keep chatting by hand."; });
   $("stopTour").addEventListener("click", () => { stopTour(); $("caption").textContent = "Stopped. Keep going by hand."; });
   resetState(); renderAll();
 
@@ -596,6 +748,9 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     ["Seat a new party at the occupied T5", (p) => p.request("POST", "/tables/5/seat", { party_size: 4 })],
     ["Mark ticket 2-1 served while it is still received", (p) => p.request("PATCH", "/kds/tickets/3", { status: "served" }, "kitchen:wen")],
     ["Guest request on a closed table session", (p) => p.request("POST", "/customer/guest-requests", { table_session_id: "ts_1", request_type: "cash" }, "guest")],
+    ["Reuse an Idempotency-Key with a different booking payload", (p) => { const r = new RESERVATIONS.Reservations(p.bus), b = { guest_name: "Kai", guest_phone: "+14155550100", party_size: 4, reservation_date: "2026-09-14", reservation_time: "20:00" }; r.request("POST", "/api/v1/reservations", b, "guest", { "Idempotency-Key": "k1" }); return r.request("POST", "/api/v1/reservations", { ...b, party_size: 6 }, "guest", { "Idempotency-Key": "k1" }); }],
+    ["Book a slot that is full", (p) => new RESERVATIONS.Reservations(p.bus).request("POST", "/api/v1/reservations", { guest_name: "Kai", guest_phone: "+14155550100", party_size: 2, reservation_date: "2026-09-14", reservation_time: "19:30" }, "guest", { "Idempotency-Key": "k9" })],
+    ["Seat a reserved table without its reservation code", (p) => { p.request("PATCH", "/tables/6/reserve", { reservation_code: "IPOT-7Q2K" }); return p.request("POST", "/tables/6/seat", { party_size: 4 }); }],
   ];
   $("ruleButtons").innerHTML = RULES.map((r, i) => `<button type="button" data-rule="${i}">${esc(r[0])}</button>`).join("");
   document.querySelectorAll("[data-rule]").forEach((b) => b.addEventListener("click", () => {
