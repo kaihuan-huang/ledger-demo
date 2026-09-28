@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tamper-Evident Ledger · Kaihuan Huang</title>
+<meta name="description" content="Restaurant bills, payments, refunds and voids written as a hash-chained event log. Edit, delete or rewrite a row and verification points to it.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B5CAD'/%3E%3Crect x='6' y='9' width='8' height='14' rx='2' fill='none' stroke='%23FDE68A' stroke-width='2.5'/%3E%3Crect x='18' y='9' width='8' height='14' rx='2' fill='none' stroke='%23FDE68A' stroke-width='2.5'/%3E%3Cpath d='M14 16h4' stroke='%23FDE68A' stroke-width='2.5'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#FFFFFF;--ink:#16191A;--ink-2:#3D4447;--muted:#5F686B;--line:#DFE3E5;--panel:#F4F6F7;
+  --accent:#0B5CAD;--ok:#1E7A45;--ok-bg:#E3F4EA;--bad:#B42318;--bad-bg:#FDECEA;--warn:#8A5A00;--warn-bg:#FFF4D6;--hl:#FFF4D6;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101315;--ink:#E6EAEC;--ink-2:#C2CACD;--muted:#98A2A6;--line:#2A3134;--panel:#181D1F;
+  --accent:#6CB2F5;--ok:#5BC98A;--ok-bg:#12291D;--bad:#F97066;--bad-bg:#3A1714;--warn:#F5C451;--warn-bg:#33280C;--hl:#33280C;
+}}
+:root[data-theme="dark"]{
+  --bg:#101315;--ink:#E6EAEC;--ink-2:#C2CACD;--muted:#98A2A6;--line:#2A3134;--panel:#181D1F;
+  --accent:#6CB2F5;--ok:#5BC98A;--ok-bg:#12291D;--bad:#F97066;--bad-bg:#3A1714;--warn:#F5C451;--warn-bg:#33280C;--hl:#33280C;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;padding:48px 16px 64px}
+main{max-width:960px;margin:0 auto}
+h1{font-size:clamp(1.7rem,4vw,2.2rem);line-height:1.2;margin:0;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:52px 0 10px}
+h3{font-size:1rem;margin:0 0 6px}
+p{margin:0 0 14px}
+a{color:var(--accent);text-underline-offset:2px}
+code{font-family:var(--mono);font-size:.86em;background:var(--panel);padding:1px 4px;border-radius:3px}
+.dek{font-size:1.1rem;color:var(--ink-2);margin-top:12px}
+.meta{font-size:.85rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:14px;align-items:center}
+.badge{display:inline-block;font-size:.8rem;border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--ink-2)}
+.muted{color:var(--muted);font-size:.88rem}
+button,input,select{font:inherit}
+button{font-size:.88rem;background:transparent;color:var(--ink-2);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button[disabled]{opacity:.5;cursor:not-allowed}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input,select{font-size:.92rem;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.grid3{grid-template-columns:minmax(0,1fr)}}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:6px 10px 6px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.74rem;letter-spacing:.03em}
+td.hash{font-family:var(--mono);font-size:.76rem;color:var(--muted);white-space:nowrap}
+tr.hl td{background:var(--hl)}
+.log{list-style:none;margin:0;padding:0;font-size:.9rem}
+.log li{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.pill{display:inline-block;font-size:.74rem;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.why{color:var(--muted);font-size:.84rem}
+.result{margin-top:10px;font-size:.92rem;padding:10px 12px;border-radius:8px;border:1px solid var(--line)}
+.result.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
+.result.bad{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}
+@media (max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stats div{border:1px solid var(--line);border-radius:8px;padding:10px}
+.stats b{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
+.stats span{font-size:.78rem;color:var(--muted)}
+.plain li{margin-bottom:8px}
+footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Tamper-Evident Ledger</h1>
+    <p class="dek">Bills, payments, refunds and voids written as a hash-chained event log. Change, delete or rewrite any row and verification points straight at it.</p>
+    <div class="meta"><span>Kaihuan Huang</span><span>Money rules from the POS work I owned at <a href="https://ipot.food/">IPOT</a>; hash chain from my governance-platform rebuild</span><span class="badge">Independent reimplementation · all data is synthetic</span></div>
+  </header>
+
+  <section aria-labelledby="shift">
+    <h2 id="shift">1. Run a shift</h2>
+    <p class="muted">Each action is checked against the current balances, then becomes exactly one event, or is refused with a reason. Refused actions write nothing.</p>
+    <div class="row"><button type="button" class="primary" id="runShift">Run the sample shift</button><button type="button" id="resetAll">Start over</button></div>
+    <ul class="log" id="actionLog"><li class="muted">Nothing yet.</li></ul>
+
+    <div class="card" style="margin-top:16px">
+      <h3>Try a refund yourself</h3>
+      <div class="row">
+        <select id="rfPayment" aria-label="Payment"></select>
+        <input id="rfAmount" type="text" inputmode="decimal" placeholder="Amount, e.g. 20.00" aria-label="Refund amount in dollars" style="width:150px">
+        <input id="rfReason" type="text" placeholder="Reason" aria-label="Reason" style="flex:1 1 160px">
+        <input id="rfApprover" type="text" placeholder="Approved by" aria-label="Approved by" value="manager:raj" style="width:140px">
+        <button type="button" id="rfGo">Refund</button>
+      </div>
+      <p class="why" id="rfResult">Run the shift first so there are payments to refund.</p>
+    </div>
+  </section>
+
+  <section aria-labelledby="chain">
+    <h2 id="chain">2. The ledger</h2>
+    <p class="muted">Each event stores the hash of the one before it, so every row vouches for all rows above it. An anchor copies the latest hash somewhere the database can't reach, like an end-of-day report.</p>
+    <div class="row"><button type="button" class="primary" id="verify">Verify the chain</button><button type="button" id="anchor">Anchor the latest hash</button><span class="muted" id="anchors">No anchors yet.</span></div>
+    <div id="verifyResult"></div>
+    <div class="tbl" style="margin-top:12px"><table><thead><tr><th>#</th><th>Event</th><th>By</th><th>Details</th><th>Previous → hash</th></tr></thead><tbody id="events"><tr><td colspan="5" class="muted">Empty.</td></tr></tbody></table></div>
+  </section>
+
+  <section aria-labelledby="cheat">
+    <h2 id="cheat">3. Try to cheat</h2>
+    <p class="muted">Pretend you have write access to the database and want the $9.00 refund to look like $1.00, or the void to disappear.</p>
+    <div class="grid3">
+      <div class="card"><h3>Change a number</h3><p class="why">Edit the refund amount in place.</p><button type="button" data-attack="edit">Change $9.00 → $1.00</button></div>
+      <div class="card"><h3>Delete a row</h3><p class="why">Remove the void from history.</p><button type="button" data-attack="delete">Delete the void</button></div>
+      <div class="card"><h3>Rewrite and re-hash</h3><p class="why">Change the refund, then recompute every hash after it so the chain looks whole.</p><button type="button" data-attack="rehash">Change and re-hash</button></div>
+    </div>
+    <div id="attackResult"></div>
+    <div class="row"><button type="button" id="restore" hidden>Restore the real ledger</button></div>
+  </section>
+
+  <section aria-labelledby="bal">
+    <h2 id="bal">4. Balances rebuilt from the ledger</h2>
+    <p class="muted">Nothing below is stored. Every figure is recomputed from the events, in integer cents, each time the ledger changes.</p>
+    <div class="stats" id="stats"></div>
+    <div class="tbl"><table><thead><tr><th>Bill</th><th>Table</th><th>Status</th><th>Total</th><th>Payment</th></tr></thead><tbody id="bills"></tbody></table></div>
+    <h3 style="margin-top:18px">Checks</h3>
+    <ul class="log" id="checks"></ul>
+  </section>
+
+  <section aria-labelledby="tests">
+    <h2 id="tests">5. Tests</h2>
+    <p class="muted">Money rules and tamper detection, run in your browser against the code on this page.</p>
+    <div class="row"><button type="button" class="primary" id="runTests">Run the tests</button><span class="muted" id="testSummary"></span></div>
+    <ul class="log" id="testOut"></ul>
+  </section>
+
+  <section aria-labelledby="src">
+    <h2 id="src">Where the rules come from</h2>
+    <ul class="plain">
+      <li><b>From the IPOT POS:</b> settlement is one transaction, so the charge, closing the bill, freeing the table and the cash-drawer entry land together or not at all. Refunds only go against captured payments, never beyond what is left including the tip, and record a reason and an approver. A void records who did it and why, and a voided bill can't be settled. Items keep the price the cashier saw when they were ordered. At IPOT these actions are written to an audit log.</li>
+      <li><b>From the governance-platform rebuild:</b> the append-only, hash-chained history and a verifier that walks it; its September 2026 run verified 328 incident events.</li>
+      <li><b>Added here:</b> anchoring. A hash chain alone only proves rows agree with each other; someone who can rewrite the table can recompute every hash (attack 3). Keeping the latest hash outside the database is what makes a rewrite visible.</li>
+    </ul>
+  </section>
+
+  <footer>
+    <a href="./">POS Platform</a> · <a href="https://kaihuan-huang.github.io/">Home</a> · <a href="https://kaihuan-huang.github.io/refund-agent-demo/">Refund Agent</a> · <a href="https://kaihuan-huang.github.io/booking-agent-demo/">Booking Agent Demo</a> · <a href="https://kaihuan-huang.github.io/pii-detector-demo/">PII Detector Demo</a> · <a href="https://kaihuan-huang.github.io/llm-arch-viz/">LLM Architecture Cards</a> · <a href="https://github.com/kaihuan-huang">GitHub</a> · <a href="https://linkedin.com/in/kaihuanhuang/">LinkedIn</a>
+  </footer>
+</main>
+
+<script src="ledger.js"></script>
+<script src="tests.js"></script>
+<script>
+(() => {
+  "use strict";
+  const L = LedgerDemo, $ = (id) => document.getElementById(id), m = L.money;
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  let ledger, view = null, highlight = null;
+
+  function describe(e) {
+    const d = e.data;
+    switch (e.type) {
+      case "bill_opened": return `${d.bill} opened at ${d.table}`;
+      case "round_added": return `${d.bill}: ${d.items.map((i) => `${i.qty}× ${i.name} @ ${m(i.unitCents)}`).join(", ")}`;
+      case "menu_price_changed": return `${d.sku} now ${m(d.cents)}`;
+      case "bill_voided": return `${d.bill} voided: “${d.reason}”`;
+      case "bill_settled": return `${d.bill} paid by ${d.method}: ${m(d.amountCents)} + ${m(d.tipCents)} tip (${d.payment}, key ${d.key})`;
+      case "payment_refunded": return `${d.payment}: refunded ${m(d.amountCents)}, “${d.reason}”, approved by ${d.approvedBy}`;
+      default: return JSON.stringify(d);
+    }
+  }
+
+  function renderLedger() {
+    const events = view || ledger.events;
+    $("events").innerHTML = events.length ? events.map((e) =>
+      `<tr class="${highlight && e.seq >= highlight ? "hl" : ""}"><td>${e.seq}</td><td><code>${esc(e.type)}</code></td><td>${esc(e.actor)}</td><td>${esc(describe(e))}</td><td class="hash">${e.prev.slice(0, 8)} → ${e.hash.slice(0, 8)}</td></tr>`).join("")
+      : `<tr><td colspan="5" class="muted">Empty.</td></tr>`;
+    $("anchors").textContent = ledger.anchors.length ? `Anchored: ${ledger.anchors.map((a) => `#${a.seq} ${a.hash.slice(0, 8)}`).join(", ")}` : "No anchors yet.";
+    renderBalances(events);
+  }
+
+  function renderBalances(events) {
+    const s = L.project(events), t = s.totals;
+    $("stats").innerHTML = [["Sales", t.sales], ["Tips", t.tips], ["Refunds", t.refunds], ["Net", t.net], ["Cash drawer", t.cashDrawer]]
+      .map(([k, v]) => `<div><b>${m(v)}</b><span>${k}</span></div>`).join("");
+    const bills = Object.values(s.bills);
+    $("bills").innerHTML = bills.length ? bills.map((b) => {
+      const p = b.payment ? s.payments[b.payment] : null;
+      const pay = p ? `${p.id} · ${p.method} · ${m(p.amountCents + p.tipCents)} · ${p.status}${p.refundedCents ? ` (${m(p.refundedCents)} back)` : ""}` : "—";
+      return `<tr><td>${esc(b.id)}</td><td>${esc(b.table)}</td><td>${esc(b.status)}${b.voidReason ? `: “${esc(b.voidReason)}”` : ""}</td><td>${m(b.totalCents)}</td><td>${esc(pay)}</td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="muted">No bills.</td></tr>`;
+    const checks = L.invariants(events);
+    $("checks").innerHTML = checks.length ? checks.map((c) => `<li><span class="pill ${c.ok ? "ok" : "bad"}">${c.ok ? "holds" : "broken"}</span><span>${esc(c.name)}</span></li>`).join("") : `<li class="muted">Run the shift first.</li>`;
+    const opts = Object.values(s.payments).map((p) => `<option value="${esc(p.id)}">${esc(p.id)} (${esc(p.bill)}, ${m(p.amountCents + p.tipCents - p.refundedCents)} left)</option>`).join("");
+    $("rfPayment").innerHTML = opts || `<option value="">No payments yet</option>`;
+  }
+
+  function logLine(entry) {
+    const cls = !entry.ok ? "bad" : entry.replay ? "warn" : "ok";
+    const tag = !entry.ok ? "refused" : entry.replay ? "no new charge" : "recorded";
+    const why = !entry.ok ? `<span class="why">${esc(entry.reason)}</span>` : entry.replay ? `<span class="why">same key, so the first payment is returned</span>` : "";
+    return `<li><span class="pill ${cls}">${tag}</span><span>${esc(entry.label)} ${why}</span></li>`;
+  }
+
+  function reset() {
+    ledger = new L.Ledger(); view = null; highlight = null;
+    $("actionLog").innerHTML = `<li class="muted">Nothing yet.</li>`;
+    $("verifyResult").innerHTML = ""; $("attackResult").innerHTML = ""; $("restore").hidden = true;
+    $("rfResult").textContent = "Run the shift first so there are payments to refund.";
+    renderLedger();
+  }
+
+  $("runShift").addEventListener("click", async () => {
+    reset();
+    $("runShift").disabled = true;
+    const log = await LedgerTests.sampleShift(ledger);
+    $("actionLog").innerHTML = log.map(logLine).join("");
+    $("rfResult").textContent = "";
+    renderLedger();
+    $("runShift").disabled = false;
+  });
+  $("resetAll").addEventListener("click", reset);
+
+  $("rfGo").addEventListener("click", async () => {
+    if (view) { $("rfResult").textContent = "Restore the real ledger first."; return; }
+    const dollars = $("rfAmount").value.trim();
+    if (!/^\d+(\.\d{1,2})?$/.test(dollars)) { $("rfResult").textContent = "Enter an amount like 20 or 20.50."; return; }
+    const cents = Math.round(Number(dollars) * 100);
+    const r = await ledger.refund($("rfPayment").value, { amountCents: cents, reason: $("rfReason").value, approvedBy: $("rfApprover").value.trim() }, "cashier:you");
+    $("rfResult").innerHTML = r.ok ? `<span class="pill ok">recorded</span> event #${r.event.seq}` : `<span class="pill bad">refused</span> ${esc(r.reason)}`;
+    renderLedger();
+  });
+
+  function showVerify(target, v, label) {
+    target.innerHTML = `<div class="result ${v.ok ? "ok" : "bad"}">${label ? `<b>${esc(label)}:</b> ` : ""}${v.ok ? `chain ok: ${v.count} events, head ${v.head.slice(0, 12)}…` : `broken at #${v.at}: ${esc(v.reason)}`}</div>`;
+  }
+
+  $("verify").addEventListener("click", async () => {
+    const events = view || ledger.events;
+    if (!events.length) { $("verifyResult").innerHTML = `<div class="result">Run the shift first.</div>`; return; }
+    showVerify($("verifyResult"), await L.verify(events, ledger.anchors), view ? "Tampered copy" : "");
+  });
+  $("anchor").addEventListener("click", () => {
+    if (view) { $("verifyResult").innerHTML = `<div class="result">Restore the real ledger before anchoring.</div>`; return; }
+    if (!ledger.anchor()) { $("verifyResult").innerHTML = `<div class="result">Nothing to anchor yet.</div>`; return; }
+    renderLedger();
+  });
+
+  document.querySelectorAll("[data-attack]").forEach((b) => b.addEventListener("click", async () => {
+    const events = ledger.events;
+    const refund = events.find((e) => e.type === "payment_refunded" && e.data.amountCents === 900);
+    const voided = events.find((e) => e.type === "bill_voided");
+    if (!refund || !voided) { $("attackResult").innerHTML = `<div class="result">Run the sample shift first.</div>`; return; }
+    if (!ledger.anchors.length) ledger.anchor();
+    const kind = b.dataset.attack;
+    let forged, seq;
+    if (kind === "edit") { seq = refund.seq; forged = L.editInPlace(events, seq, (d) => { d.amountCents = 100; }); }
+    else if (kind === "delete") { seq = voided.seq; forged = L.deleteEvent(events, seq); }
+    else { seq = refund.seq; forged = await L.rewriteAndRehash(events, seq, (d) => { d.amountCents = 100; }); }
+    view = forged; highlight = seq;
+    renderLedger();
+    const alone = await L.verify(forged), anchored = await L.verify(forged, ledger.anchors);
+    const box = document.createElement("div");
+    showVerify(box, alone, "Chain alone");
+    const box2 = document.createElement("div");
+    showVerify(box2, anchored, `Against the anchor (#${ledger.anchors[ledger.anchors.length - 1].seq})`);
+    const note = kind === "rehash"
+      ? "The rows agree with each other again, so the chain alone looks fine. Only the anchored hash, kept outside the database, gives the rewrite away."
+      : kind === "delete"
+        ? "A row is missing, so the numbering and the link to the previous hash break right where it was."
+        : "The altered row no longer matches its hash, so verification stops right there.";
+    $("attackResult").innerHTML = box.innerHTML + box2.innerHTML + `<p class="why" style="margin-top:8px">${note} The ledger and balances above now show the tampered copy.</p>`;
+    $("restore").hidden = false;
+  }));
+  $("restore").addEventListener("click", () => { view = null; highlight = null; $("attackResult").innerHTML = ""; $("restore").hidden = true; renderLedger(); });
+
+  $("runTests").addEventListener("click", async () => {
+    const t0 = performance.now();
+    const r = await LedgerTests.run();
+    $("testSummary").textContent = `${r.filter((x) => x.pass).length} of ${r.length} passed in ${Math.round(performance.now() - t0)} ms`;
+    $("testOut").innerHTML = r.map((x) => `<li><span class="pill ${x.pass ? "ok" : "bad"}">${x.pass ? "pass" : "fail"}</span><span>${esc(x.name)}${x.error ? ` <span class="why">${esc(x.error)}</span>` : ""}</span></li>`).join("");
+  });
+
+  reset();
+})();
+</script>
+</body>
+</html>

@@ -3,33 +3,35 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tamper-Evident Ledger · Kaihuan Huang</title>
-<meta name="description" content="Restaurant bills, payments, refunds and voids written as a hash-chained event log. Edit, delete or rewrite a row and verification points to it.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B5CAD'/%3E%3Crect x='6' y='9' width='8' height='14' rx='2' fill='none' stroke='%23FDE68A' stroke-width='2.5'/%3E%3Crect x='18' y='9' width='8' height='14' rx='2' fill='none' stroke='%23FDE68A' stroke-width='2.5'/%3E%3Cpath d='M14 16h4' stroke='%23FDE68A' stroke-width='2.5'/%3E%3C/svg%3E">
+<title>POS Platform · Kaihuan Huang</title>
+<meta name="description" content="A restaurant point-of-sale platform you can operate in the browser: cashier terminal, kitchen display and guest app, with the backend trace of every request. Router → Service → Model, one transaction per request.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230B5CAD'/%3E%3Crect x='7' y='7' width='18' height='6' rx='1.5' fill='%23FDE68A'/%3E%3Crect x='7' y='16' width='18' height='4' rx='1.5' fill='none' stroke='%23FDE68A' stroke-width='2'/%3E%3Crect x='7' y='23' width='18' height='4' rx='1.5' fill='none' stroke='%23FDE68A' stroke-width='2'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#FFFFFF;--ink:#16191A;--ink-2:#3D4447;--muted:#5F686B;--line:#DFE3E5;--panel:#F4F6F7;
-  --accent:#0B5CAD;--ok:#1E7A45;--ok-bg:#E3F4EA;--bad:#B42318;--bad-bg:#FDECEA;--warn:#8A5A00;--warn-bg:#FFF4D6;--hl:#FFF4D6;
-  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --accent:#0B5CAD;--accent-bg:#E8F1FB;--ok:#1E7A45;--ok-bg:#E3F4EA;--bad:#B42318;--bad-bg:#FDECEA;--warn:#8A5A00;--warn-bg:#FFF4D6;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --t-bg:#141A26;--t-bg2:#1C2433;--t-bg3:#26314A;--t-line:#303B52;--t-ink:#EEF2F7;--t-muted:#9AA6B8;--t-blue:#3B82F6;--t-green:#22A55B;--t-amber:#E0A82E;--t-red:#F26D6D;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#101315;--ink:#E6EAEC;--ink-2:#C2CACD;--muted:#98A2A6;--line:#2A3134;--panel:#181D1F;
-  --accent:#6CB2F5;--ok:#5BC98A;--ok-bg:#12291D;--bad:#F97066;--bad-bg:#3A1714;--warn:#F5C451;--warn-bg:#33280C;--hl:#33280C;
+  --accent:#6CB2F5;--accent-bg:#152A40;--ok:#5BC98A;--ok-bg:#12291D;--bad:#F97066;--bad-bg:#3A1714;--warn:#F5C451;--warn-bg:#33280C;
 }}
 :root[data-theme="dark"]{
   --bg:#101315;--ink:#E6EAEC;--ink-2:#C2CACD;--muted:#98A2A6;--line:#2A3134;--panel:#181D1F;
-  --accent:#6CB2F5;--ok:#5BC98A;--ok-bg:#12291D;--bad:#F97066;--bad-bg:#3A1714;--warn:#F5C451;--warn-bg:#33280C;--hl:#33280C;
+  --accent:#6CB2F5;--accent-bg:#152A40;--ok:#5BC98A;--ok-bg:#12291D;--bad:#F97066;--bad-bg:#3A1714;--warn:#F5C451;--warn-bg:#33280C;
 }
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;padding:48px 16px 64px}
-main{max-width:960px;margin:0 auto}
-h1{font-size:clamp(1.7rem,4vw,2.2rem);line-height:1.2;margin:0;letter-spacing:-.01em}
-h2{font-size:1.15rem;margin:52px 0 10px}
+main{max-width:1120px;margin:0 auto}
+h1{font-size:clamp(1.7rem,4vw,2.3rem);line-height:1.2;margin:0;letter-spacing:-.01em}
+h2{font-size:1.15rem;margin:56px 0 10px}
 h3{font-size:1rem;margin:0 0 6px}
+h4{font-size:.76rem;margin:0 0 6px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
 p{margin:0 0 14px}
 a{color:var(--accent);text-underline-offset:2px}
 code{font-family:var(--mono);font-size:.86em;background:var(--panel);padding:1px 4px;border-radius:3px}
+pre{font-family:var(--mono);font-size:.76rem;line-height:1.45;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
 .dek{font-size:1.1rem;color:var(--ink-2);margin-top:12px}
 .meta{font-size:.85rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 16px;margin-top:14px;align-items:center}
 .badge{display:inline-block;font-size:.8rem;border:1px solid var(--line);border-radius:999px;padding:2px 10px;color:var(--ink-2)}
@@ -37,249 +39,576 @@ code{font-family:var(--mono);font-size:.86em;background:var(--panel);padding:1px
 button,input,select{font:inherit}
 button{font-size:.88rem;background:transparent;color:var(--ink-2);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button[disabled]{opacity:.5;cursor:not-allowed}
+button[disabled]{opacity:.45;cursor:not-allowed}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-input,select{font-size:.92rem;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
+select,input{color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 8px;min-width:0}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
-.card{border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
-.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
-@media (max-width:760px){.grid3{grid-template-columns:minmax(0,1fr)}}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0;background:var(--bg)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:820px){.grid2{grid-template-columns:minmax(0,1fr)}}
 .tbl{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:.86rem}
-th,td{text-align:left;padding:6px 10px 6px 0;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-weight:600;color:var(--muted);font-size:.74rem;letter-spacing:.03em}
-td.hash{font-family:var(--mono);font-size:.76rem;color:var(--muted);white-space:nowrap}
-tr.hl td{background:var(--hl)}
+table{border-collapse:collapse;width:100%;font-size:.84rem}
+th,td{text-align:left;padding:5px 10px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;color:var(--muted);font-size:.72rem;letter-spacing:.03em}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+td.mono{font-family:var(--mono);font-size:.76rem}
+.pill{display:inline-block;font-size:.74rem;border-radius:999px;padding:1px 8px;white-space:nowrap;font-family:var(--mono)}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}.pill.bad{background:var(--bad-bg);color:var(--bad)}.pill.warn{background:var(--warn-bg);color:var(--warn)}.pill.info{background:var(--accent-bg);color:var(--accent)}
+.chip{display:inline-block;font-size:.74rem;border:1px solid var(--line);border-radius:6px;padding:1px 7px;margin:2px 4px 2px 0;font-family:var(--mono);background:var(--panel)}
+.chip.on{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
 .log{list-style:none;margin:0;padding:0;font-size:.9rem}
 .log li{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line);align-items:baseline}
-.pill{display:inline-block;font-size:.74rem;border-radius:999px;padding:1px 8px;white-space:nowrap}
-.pill.ok{background:var(--ok-bg);color:var(--ok)}
-.pill.bad{background:var(--bad-bg);color:var(--bad)}
-.pill.warn{background:var(--warn-bg);color:var(--warn)}
 .why{color:var(--muted);font-size:.84rem}
-.result{margin-top:10px;font-size:.92rem;padding:10px 12px;border-radius:8px;border:1px solid var(--line)}
-.result.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}
-.result.bad{background:var(--bad-bg);color:var(--bad);border-color:transparent}
-.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:14px}
-@media (max-width:760px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.stats div{border:1px solid var(--line);border-radius:8px;padding:10px}
-.stats b{display:block;font-size:1.2rem;font-variant-numeric:tabular-nums}
-.stats span{font-size:.78rem;color:var(--muted)}
 .plain li{margin-bottom:8px}
+.result{margin-top:10px;font-size:.92rem;padding:10px 12px;border-radius:8px;border:1px solid var(--line)}
+.result.ok{background:var(--ok-bg);color:var(--ok);border-color:transparent}.result.bad{background:var(--bad-bg);color:var(--bad);border-color:transparent}
+.cmp td:first-child{width:45%}.tick{color:var(--ok);font-weight:700}.cross{color:var(--bad);font-weight:700}
+/* diagram */
+.diagram{border:1px solid var(--line);border-radius:10px;padding:8px;background:var(--panel)}
+.diagram svg{width:100%;height:auto;display:block;font-family:var(--sans)}
+.node{cursor:pointer}.node rect{fill:var(--bg);stroke:var(--line);stroke-width:1.2}
+.node.mine rect{stroke:var(--accent);stroke-width:2}.node.part rect{stroke:var(--accent);stroke-width:2;stroke-dasharray:6 4}.node.sel rect{fill:var(--accent-bg)}
+.node text{fill:var(--ink);font-size:13px;pointer-events:none}.node text.sub{fill:var(--muted);font-size:11px}
+.layer rect{fill:var(--panel)}
+.edge{stroke:var(--muted);stroke-width:1.3;fill:none;marker-end:url(#arr)}.edge.dash{stroke-dasharray:5 4}
+.lbl{fill:var(--muted);font-size:11px}
+.group rect{fill:none;stroke:var(--line);stroke-dasharray:4 4}.group text{fill:var(--muted);font-size:11px;letter-spacing:.04em}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.82rem;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:22px;height:12px;border:2px solid var(--accent);border-radius:3px;vertical-align:-2px;margin-right:6px}
+.legend i.part{border-style:dashed}.legend i.team{border-color:var(--line);border-width:1.2px}
+/* devices */
+.devices{display:grid;grid-template-columns:minmax(0,1.9fr) minmax(0,1fr) 250px;gap:14px;align-items:start}
+@media (max-width:1000px){.devices{grid-template-columns:minmax(0,1fr)}}
+.term{background:var(--t-bg);color:var(--t-ink);border-radius:14px;border:1px solid var(--t-line);overflow:hidden;font-size:.84rem;line-height:1.4;transition:box-shadow .3s}
+.term.active{box-shadow:0 0 0 3px var(--accent)}
+.term .top{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;background:#0F141E;font-weight:600;border-bottom:1px solid var(--t-line);font-size:.8rem}
+.term .top span{color:var(--t-muted);font-weight:400}
+.term .tabs{display:flex;gap:2px;padding:6px 8px;background:var(--t-bg2);border-bottom:1px solid var(--t-line);flex-wrap:wrap}
+.term .tabs button{background:transparent;color:var(--t-muted);border:none;padding:5px 11px;border-radius:6px;font-size:.8rem}
+.term .tabs button.on{background:var(--t-bg3);color:#fff}
+.term .tabs button .n{display:inline-block;min-width:18px;text-align:center;background:var(--t-red);color:#fff;border-radius:999px;font-size:.68rem;margin-left:4px;padding:0 4px}
+.term .main{display:grid;grid-template-columns:minmax(0,1fr) 250px;min-height:430px}
+@media (max-width:640px){.term .main{grid-template-columns:minmax(0,1fr)}}
+.term .pane{padding:12px;min-width:0}
+.term .ticket{background:var(--t-bg2);border-left:1px solid var(--t-line);display:flex;flex-direction:column;min-width:0}
+.term .ticket .hd{padding:10px 12px;border-bottom:1px solid var(--t-line);font-weight:600}
+.term .ticket .hd small{display:block;color:var(--t-muted);font-weight:400}
+.term .ticket .lines{flex:1;padding:6px 12px;overflow:auto;max-height:280px}
+.term .ticket .round{color:var(--t-muted);font-size:.72rem;letter-spacing:.04em;text-transform:uppercase;margin:8px 0 2px}
+.term .ticket .ln{display:flex;justify-content:space-between;gap:8px;padding:2px 0}
+.term .ticket .ln small{color:var(--t-muted);display:block}
+.term .ticket .tot{padding:8px 12px;border-top:1px solid var(--t-line);font-variant-numeric:tabular-nums}
+.term .ticket .tot div{display:flex;justify-content:space-between}
+.term .ticket .tot .big{font-size:1.1rem;font-weight:700}
+.term .ticket .acts{padding:10px 12px;display:grid;gap:6px}
+.tb{background:var(--t-bg3);color:#fff;border:none;border-radius:8px;padding:9px 10px;font-size:.84rem;font-weight:600;cursor:pointer;text-align:center}
+.tb.green{background:var(--t-green)}.tb.blue{background:var(--t-blue)}.tb.ghost{background:transparent;border:1px solid var(--t-line);color:var(--t-muted);font-weight:500}.tb.red{background:transparent;border:1px solid var(--t-line);color:var(--t-red)}
+.tb.sm{padding:5px 9px;font-size:.78rem;font-weight:500}.tb.on{outline:2px solid #fff}
+.tb[disabled]{opacity:.35;cursor:not-allowed}
+.floor{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.tshape{aspect-ratio:1.15;border-radius:14px;background:var(--t-bg3);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;border:2px solid transparent;font-weight:600}
+.tshape small{color:var(--t-muted);font-weight:400;font-size:.72rem}
+.tshape.occupied{background:#1D3F70;border-color:var(--t-blue)}.tshape.dirty{background:#4A3810;border-color:var(--t-amber)}.tshape.sel{outline:2px solid #fff;outline-offset:2px}
+.cats{display:flex;gap:6px;margin-bottom:10px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.tile{background:var(--t-bg3);border:none;color:#fff;border-radius:10px;padding:12px 10px;text-align:left;min-height:62px;cursor:pointer;font-size:.84rem}
+.tile small{display:block;color:var(--t-muted);margin-top:2px}
+.tile .q{float:right;background:var(--t-blue);border-radius:999px;padding:0 7px;font-size:.74rem}
+.opts{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+.tlabel{color:var(--t-muted);font-size:.74rem;letter-spacing:.05em;text-transform:uppercase;margin:10px 0 4px}
+.amount{font-size:2rem;font-weight:700;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.term input,.term select{background:var(--t-bg2);color:var(--t-ink);border:1px solid var(--t-line);border-radius:6px;padding:6px 8px;font-size:.84rem}
+.kcards{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;padding:12px}
+.kcard{background:var(--t-bg2);border:1px solid var(--t-line);border-radius:10px;overflow:hidden}
+.kcard .kh{display:flex;justify-content:space-between;padding:6px 10px;font-weight:700;background:var(--t-bg3)}
+.kcard.received .kh{background:#1D3F70}.kcard.preparing .kh{background:#5A4210}.kcard.ready .kh{background:#1E5C38}.kcard.served{opacity:.55}.kcard.cancelled .kh{background:#5C1F1F}
+.kcard ul{list-style:none;margin:0;padding:6px 10px;font-size:.82rem}
+.kcard li small{color:var(--t-muted);display:block}
+.kcard .kb{padding:6px 10px}.kcard .kb .tb{width:100%}
+.phone{background:#F7F8FA;color:#16191A;border:8px solid #22262E;border-radius:30px;min-height:430px;padding:14px 12px;font-size:.84rem;line-height:1.4;box-shadow:0 8px 24px rgba(0,0,0,.18);transition:box-shadow .3s}
+.phone.active{box-shadow:0 0 0 3px var(--accent),0 8px 24px rgba(0,0,0,.18)}
+.phone .ph{font-weight:700;font-size:.95rem;margin-bottom:2px}.phone .ps{color:#5F686B;font-size:.76rem;margin-bottom:10px}
+.phone .pcard{background:#fff;border:1px solid #E3E6EA;border-radius:12px;padding:10px;margin-bottom:10px}
+.phone .pb{width:100%;background:#0B5CAD;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:600;margin-top:6px;cursor:pointer}
+.phone .pb.sec{background:#E8F1FB;color:#0B5CAD}
+.phone .pb[disabled]{opacity:.4}
+.phone .req{font-size:.78rem;padding:6px 0;border-top:1px solid #EEF0F2;display:flex;justify-content:space-between}
+.tourbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0}
+.caption{flex:1 1 260px;font-size:.9rem;color:var(--ink-2);min-height:1.6em}
+/* trace */
+.trace{border:1px solid var(--line);border-radius:12px;margin-top:14px;background:var(--bg)}
+.trace .bar{display:flex;justify-content:space-between;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);font-size:.8rem;font-weight:600}
+.trace .list{max-height:460px;overflow:auto}
+.tr{border-bottom:1px solid var(--line)}
+.tr summary{padding:8px 14px;cursor:pointer;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.82rem;list-style:none}
+.tr summary::-webkit-details-marker{display:none}
+.tr summary .m{font-family:var(--mono);font-weight:700;color:var(--accent)}.tr summary .p{font-family:var(--mono)}
+.role{font-size:.68rem;padding:1px 7px;border-radius:4px;background:var(--panel);border:1px solid var(--line);text-transform:uppercase;letter-spacing:.04em}
+.tr .bd{padding:4px 14px 12px}
+.tr .path{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.8rem;margin:6px 0}
+.tr .rows{font-size:.78rem;font-family:var(--mono);margin-top:6px}
+.tr .rows div{padding:2px 0;border-top:1px dashed var(--line)}
+.tr.new summary{background:var(--accent-bg)}
 footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted)}
 </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>Tamper-Evident Ledger</h1>
-    <p class="dek">Bills, payments, refunds and voids written as a hash-chained event log. Change, delete or rewrite any row and verification points straight at it.</p>
-    <div class="meta"><span>Kaihuan Huang</span><span>Money rules from the POS work I owned at <a href="https://ipot.food/">IPOT</a>; hash chain from my governance-platform rebuild</span><span class="badge">Independent reimplementation · all data is synthetic</span></div>
+    <h1>POS Platform: operate the restaurant, watch the backend</h1>
+    <p class="dek">The point-of-sale platform I led at IPOT, reimplemented in the browser. A cashier terminal, a kitchen display and a guest app run against the same in-page service. Every tap becomes a request through <code>Router → Service → Model</code>, one transaction each, and the trace below shows exactly which rows it wrote.</p>
+    <div class="meta"><span>Kaihuan Huang</span><span>Architecture and money rules from the POS work I led at <a href="https://ipot.food/">IPOT</a>, a team-built platform</span><span class="badge">Independent reimplementation · all data is synthetic</span></div>
   </header>
 
-  <section aria-labelledby="shift">
-    <h2 id="shift">1. Run a shift</h2>
-    <p class="muted">Each action is checked against the current balances, then becomes exactly one event, or is refused with a reason. Refused actions write nothing.</p>
-    <div class="row"><button type="button" class="primary" id="runShift">Run the sample shift</button><button type="button" id="resetAll">Start over</button></div>
-    <ul class="log" id="actionLog"><li class="muted">Nothing yet.</li></ul>
-
-    <div class="card" style="margin-top:16px">
-      <h3>Try a refund yourself</h3>
-      <div class="row">
-        <select id="rfPayment" aria-label="Payment"></select>
-        <input id="rfAmount" type="text" inputmode="decimal" placeholder="Amount, e.g. 20.00" aria-label="Refund amount in dollars" style="width:150px">
-        <input id="rfReason" type="text" placeholder="Reason" aria-label="Reason" style="flex:1 1 160px">
-        <input id="rfApprover" type="text" placeholder="Approved by" aria-label="Approved by" value="manager:raj" style="width:140px">
-        <button type="button" id="rfGo">Refund</button>
-      </div>
-      <p class="why" id="rfResult">Run the shift first so there are payments to refund.</p>
+  <section aria-labelledby="run">
+    <h2 id="run">1. Run the restaurant</h2>
+    <p class="muted">Play the tour, or drive it yourself: tap a table, build the order, send it to the kitchen, take payment, refund a line, void a bill. The guest phone is on the seated table; the kitchen screen gets its tickets over WebSocket.</p>
+    <div class="tourbar"><button type="button" class="primary" id="tour">Play the 40-second tour</button><button type="button" id="stopTour" hidden>Stop</button><button type="button" id="resetPos">Reset the shift</button><span class="caption" id="caption"></span></div>
+    <div class="devices">
+      <div class="term" id="term"></div>
+      <div class="term" id="kds"></div>
+      <div class="phone" id="phone"></div>
     </div>
+    <div class="trace" id="trace"><div class="bar"><span>Backend trace · newest first</span><span id="traceCount" class="muted"></span></div><div class="list" id="traceList"><p class="why" style="padding:12px 14px;margin:0">Nothing yet. Tap a table on the cashier terminal.</p></div></div>
+    <p class="why" style="margin-top:10px" id="checkLine"></p>
   </section>
 
-  <section aria-labelledby="chain">
-    <h2 id="chain">2. The ledger</h2>
-    <p class="muted">Each event stores the hash of the one before it, so every row vouches for all rows above it. An anchor copies the latest hash somewhere the database can't reach, like an end-of-day report.</p>
-    <div class="row"><button type="button" class="primary" id="verify">Verify the chain</button><button type="button" id="anchor">Anchor the latest hash</button><span class="muted" id="anchors">No anchors yet.</span></div>
-    <div id="verifyResult"></div>
-    <div class="tbl" style="margin-top:12px"><table><thead><tr><th>#</th><th>Event</th><th>By</th><th>Details</th><th>Previous → hash</th></tr></thead><tbody id="events"><tr><td colspan="5" class="muted">Empty.</td></tr></tbody></table></div>
+  <section aria-labelledby="map">
+    <h2 id="map">2. The platform</h2>
+    <p class="muted">Five clients, one FastAPI service in three layers, one PostgreSQL, and two neighbouring services with a hard boundary. Click a box to see what it does and which parts I built.</p>
+    <div class="diagram" id="diagram"></div>
+    <div class="legend"><span><i></i>I built or led</span><span><i class="part"></i>Team-built; I added parts or the contract</span><span><i class="team"></i>Team-built; I integrated with it</span></div>
+    <div class="card" id="nodeDetail" style="margin-top:12px"><h3>Pick a box</h3><p class="why" style="margin:0">Routers validate input and shape responses. Services hold every business rule and own the transaction. Models are SQLAlchemy tables migrated with Alembic. Nothing below that line is reachable from a router.</p></div>
   </section>
 
-  <section aria-labelledby="cheat">
-    <h2 id="cheat">3. Try to cheat</h2>
-    <p class="muted">Pretend you have write access to the database and want the $9.00 refund to look like $1.00, or the void to disappear.</p>
-    <div class="grid3">
-      <div class="card"><h3>Change a number</h3><p class="why">Edit the refund amount in place.</p><button type="button" data-attack="edit">Change $9.00 → $1.00</button></div>
-      <div class="card"><h3>Delete a row</h3><p class="why">Remove the void from history.</p><button type="button" data-attack="delete">Delete the void</button></div>
-      <div class="card"><h3>Rewrite and re-hash</h3><p class="why">Change the refund, then recompute every hash after it so the chain looks whole.</p><button type="button" data-attack="rehash">Change and re-hash</button></div>
+  <section aria-labelledby="atomic">
+    <h2 id="atomic">3. Settlement: four calls, or one transaction</h2>
+    <p class="muted">Before my change, the till settled a bill with four requests: capture the payment, close the bill, move the table, write the drawer. Each committed on its own. I replaced them with <code>POST /orders/{id}/settle</code>, which does all four inside one transaction. Pick where the process dies and run both.</p>
+    <div class="row">
+      <label for="crash">The API process dies</label>
+      <select id="crash"><option value="1">after capturing the payment</option><option value="2" selected>after closing the bill</option><option value="3">after moving the table</option><option value="">never</option></select>
+      <button type="button" class="primary" id="runCmp">Run both</button>
     </div>
-    <div id="attackResult"></div>
-    <div class="row"><button type="button" id="restore" hidden>Restore the real ledger</button></div>
+    <div class="grid2">
+      <div class="card"><h3>Before: four calls from the till</h3><div id="cmpLegacy" class="why">Not run yet.</div></div>
+      <div class="card"><h3>After: one settle transaction</h3><div id="cmpAtomic" class="why">Not run yet.</div></div>
+    </div>
+    <h3 style="margin-top:18px">Three holes the same change closed</h3>
+    <ul class="plain">
+      <li><b>Any signed-in user could close an unpaid bill.</b> <code>PATCH /orders/{id}</code> with <code>status=closed</code> skipped every payment check, back-filled <code>paid_total</code> from the total and freed the table. Closing now goes through <code>/close</code> or <code>/settle</code> only.</li>
+      <li><b>An abandoned payment attempt raised the guest's bill.</b> The tip was added to <code>order.total</code> when the intent was created and never removed when it was cancelled. The tip now lives on the payment that carries it; the bill's tip is the sum over captured payments.</li>
+      <li><b>A paid table stayed dirty forever.</b> <code>dirty</code> was written in one place and cleared nowhere. Settle takes the target floor status, and <code>PATCH /tables/{id}/floor-status</code> writes it explicitly.</li>
+    </ul>
   </section>
 
-  <section aria-labelledby="bal">
-    <h2 id="bal">4. Balances rebuilt from the ledger</h2>
-    <p class="muted">Nothing below is stored. Every figure is recomputed from the events, in integer cents, each time the ledger changes.</p>
-    <div class="stats" id="stats"></div>
-    <div class="tbl"><table><thead><tr><th>Bill</th><th>Table</th><th>Status</th><th>Total</th><th>Payment</th></tr></thead><tbody id="bills"></tbody></table></div>
-    <h3 style="margin-top:18px">Checks</h3>
-    <ul class="log" id="checks"></ul>
+  <section aria-labelledby="rules">
+    <h2 id="rules">4. Try to break it</h2>
+    <p class="muted">Each button runs against a fresh, fully settled shift. The service answers with the status code and error code the real API uses, and the transaction is rolled back.</p>
+    <div class="row" id="ruleButtons"></div>
+    <div id="ruleOut"></div>
   </section>
 
   <section aria-labelledby="tests">
     <h2 id="tests">5. Tests</h2>
-    <p class="muted">Money rules and tamper detection, run in your browser against the code on this page.</p>
+    <p class="muted">Money rules, price snapshots, kitchen rounds, guest requests and the crash behaviour of settlement, run in your browser against the code on this page.</p>
     <div class="row"><button type="button" class="primary" id="runTests">Run the tests</button><span class="muted" id="testSummary"></span></div>
     <ul class="log" id="testOut"></ul>
   </section>
 
-  <section aria-labelledby="src">
-    <h2 id="src">Where the rules come from</h2>
-    <ul class="plain">
-      <li><b>From the IPOT POS:</b> settlement is one transaction, so the charge, closing the bill, freeing the table and the cash-drawer entry land together or not at all. Refunds only go against captured payments, never beyond what is left including the tip, and record a reason and an approver. A void records who did it and why, and a voided bill can't be settled. Items keep the price the cashier saw when they were ordered. At IPOT these actions are written to an audit log.</li>
-      <li><b>From the governance-platform rebuild:</b> the append-only, hash-chained history and a verifier that walks it; its September 2026 run verified 328 incident events.</li>
-      <li><b>Added here:</b> anchoring. A hash chain alone only proves rows agree with each other; someone who can rewrite the table can recompute every hash (attack 3). Keeping the latest hash outside the database is what makes a rewrite visible.</li>
-    </ul>
+  <section aria-labelledby="who">
+    <h2 id="who">6. Who built what</h2>
+    <p class="muted">The platform is a team effort. Commit hashes are in the IPOT repositories; the demo reimplements the behaviour, not the code.</p>
+    <div class="tbl"><table>
+      <thead><tr><th>Area</th><th>Mine</th><th>Team</th></tr></thead>
+      <tbody>
+        <tr><td>Money flow</td><td>Atomic settlement, tips on payments, refunds with reason and approver, audited void, cash-drawer movements <span class="muted">(6de5698, 7eb27be, b3c7846)</span></td><td>Payment-intent model, PIN login, shifts</td></tr>
+        <tr><td>Kitchen</td><td>Many rounds per bill, price by the menu the cashier saw, ticket numbers owned by the API, status derived from every round <span class="muted">(a9814b2)</span></td><td>KDS screen, WebSocket rooms, printing</td></tr>
+        <tr><td>Guests</td><td>Guest-request inbox with dedupe and a 3-minute SLA <span class="muted">(392e5ac)</span>; QR ordering flow with payment step; phone sign-in</td><td>QR app shell, menus, i18n</td></tr>
+        <tr><td>Floor and staff</td><td>Table triage with Postgres persistence <span class="muted">(97c8270)</span>; scheduling and availability <span class="muted">(0975dec)</span>; cashier rota</td><td>Floor plan, table model, iOS station</td></tr>
+        <tr><td>Delivery</td><td>iOS API contract answering the station's 11 asks <span class="muted">(e520b80)</span>; staging CI; diverged Alembic heads repaired; a long-red test suite brought back to green <span class="muted">(7fc408c)</span></td><td>MVP, Docker stack, deployment</td></tr>
+        <tr><td>Neighbours</td><td>Reservation API from the first commit, in production; Nalu booking flow v2 (pre-launch); the decision to move the AI assistant out of the POS process</td><td>Nalu scaffold, read-only POS grounding</td></tr>
+      </tbody>
+    </table></div>
+    <p class="why" style="margin-top:10px">Not shown here and not claimed: real card capture (simulated on the main branch), receipt printing, production deployment. For the tamper-evident audit trail behind these events, see the <a href="ledger.html">ledger page</a>.</p>
   </section>
 
   <footer>
-    <a href="https://kaihuan-huang.github.io/">Home</a> · <a href="https://kaihuan-huang.github.io/refund-agent-demo/">Refund Agent</a> · <a href="https://kaihuan-huang.github.io/booking-agent-demo/">Booking Agent Demo</a> · <a href="https://kaihuan-huang.github.io/pii-detector-demo/">PII Detector Demo</a> · <a href="https://kaihuan-huang.github.io/llm-arch-viz/">LLM Architecture Cards</a> · <a href="https://github.com/kaihuan-huang">GitHub</a> · <a href="https://linkedin.com/in/kaihuanhuang/">LinkedIn</a>
+    <a href="https://kaihuan-huang.github.io/">Home</a> · <a href="ledger.html">Tamper-Evident Ledger</a> · <a href="https://kaihuan-huang.github.io/refund-agent-demo/">Refund Agent</a> · <a href="https://kaihuan-huang.github.io/booking-agent-demo/">Booking Agent Demo</a> · <a href="https://kaihuan-huang.github.io/pii-detector-demo/">PII Detector Demo</a> · <a href="https://github.com/kaihuan-huang">GitHub</a> · <a href="https://linkedin.com/in/kaihuanhuang/">LinkedIn</a>
   </footer>
 </main>
 
-<script src="ledger.js"></script>
-<script src="tests.js"></script>
+<script src="pos.js"></script>
+<script src="pos-tests.js"></script>
 <script>
-(() => {
+(function () {
   "use strict";
-  const L = LedgerDemo, $ = (id) => document.getElementById(id), m = L.money;
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  let ledger, view = null, highlight = null;
+  const { Pos, money } = POS;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const pretty = (v) => esc(JSON.stringify(v, null, 1).replace(/\n\s*/g, " ").replace(/\{ /g, "{").replace(/ \}/g, "}"));
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  function describe(e) {
-    const d = e.data;
-    switch (e.type) {
-      case "bill_opened": return `${d.bill} opened at ${d.table}`;
-      case "round_added": return `${d.bill}: ${d.items.map((i) => `${i.qty}× ${i.name} @ ${m(i.unitCents)}`).join(", ")}`;
-      case "menu_price_changed": return `${d.sku} now ${m(d.cents)}`;
-      case "bill_voided": return `${d.bill} voided: “${d.reason}”`;
-      case "bill_settled": return `${d.bill} paid by ${d.method}: ${m(d.amountCents)} + ${m(d.tipCents)} tip (${d.payment}, key ${d.key})`;
-      case "payment_refunded": return `${d.payment}: refunded ${m(d.amountCents)}, “${d.reason}”, approved by ${d.approvedBy}`;
-      default: return JSON.stringify(d);
+  // ================= 1. run the restaurant =================
+  const CATS = { Sets: ["beef", "lamb"], Sides: ["veg", "noodles"], Drinks: ["tea", "soda"] };
+  const VOID_REASONS = ["guests left before the food", "duplicate bill", "entered on the wrong table"];
+  const REFUND_REASONS = ["item arrived cold", "wrong dish served", "guest complaint"];
+  let pos, sel, tab, cat, cart, pay, refund, voidReason, traceSeen, tourRunning = false;
+  function resetState() {
+    pos = new Pos(); sel = null; tab = "tables"; cat = "Sets"; cart = {}; traceSeen = 0;
+    pay = { method: "cash", tipPct: 18, tipCustom: null, tendered: null };
+    refund = { amount: "", reason: REFUND_REASONS[0] }; voidReason = VOID_REASONS[0];
+    $("traceList").innerHTML = '<p class="why" style="padding:12px 14px;margin:0">Nothing yet. Tap a table on the cashier terminal.</p>';
+    $("traceCount").textContent = "";
+  }
+  const table = (id) => pos.db.tables.find((t) => t.id === id);
+  const openOrder = (t) => (t && t.current_order_id ? pos.bill(t.current_order_id) : null);
+  const lastOrder = (t) => { const os = pos.db.orders.filter((o) => o.table_id === t.id); return os.length ? pos.bill(os[os.length - 1].id) : null; };
+  const session = (t) => pos.db.table_sessions.find((s) => s.table_id === t.id && s.is_active);
+  const item = (id) => pos.db.menu_item_instances.find((i) => i.id === id);
+  const clock = () => pos.now().slice(11, 16);
+
+  function act(role, method, path, body, actor) {
+    const e = pos.request(method, path, body, actor);
+    e.role = role;
+    renderAll();
+    return e;
+  }
+  function flash(which) {
+    for (const id of ["term", "kds", "phone"]) $(id).classList.toggle("active", id === which);
+  }
+
+  // ---- cashier terminal ----
+  function tipCents(o) {
+    if (pay.tipCustom != null) return pay.tipCustom;
+    return pay.tipPct ? Math.round(o.subtotal_cents * pay.tipPct / 100) : 0;
+  }
+  function renderTerm() {
+    const t = sel ? table(sel) : null;
+    const o = t ? openOrder(t) : null;
+    const last = t ? lastOrder(t) : null;
+    const openReqs = pos.db.guest_requests.filter((r) => ["open", "acked"].includes(r.status)).length;
+    const tabs = [["tables", "Tables"], ["order", "Order"], ["pay", "Pay"], ["requests", `Requests${openReqs ? `<span class="n">${openReqs}</span>` : ""}`], ["manager", "Manager"]];
+    let left = "", ticket = "";
+    if (tab === "tables") {
+      left = `<div class="floor">${pos.db.tables.map((x) => { const s = session(x); return `<div class="tshape ${x.status}${x.id === sel ? " sel" : ""}" data-t="${x.id}" role="button" tabindex="0">${esc(x.name)}<small>${x.status === "available" ? "free" : x.status === "dirty" ? "needs cleaning" : `${s && s.party_size ? s.party_size + " guests" : "seated"}${x.current_order_id ? " · bill " + x.current_order_id : ""}`}</small></div>`; }).join("")}</div>
+        <p class="tlabel" style="margin-top:14px">${t ? esc(t.name) + " selected" : "tap a table"}</p>
+        ${t && t.status === "available" ? `<div class="opts">${[2, 3, 4].map((n) => `<button class="tb sm" data-seat="${n}">Seat ${n}</button>`).join("")}</div>` : ""}
+        ${t && t.status === "dirty" ? `<div class="opts"><button class="tb sm green" data-clean="1">Mark ${esc(t.name)} clean</button></div>` : ""}
+        ${t && t.status === "occupied" ? `<div class="opts"><button class="tb sm blue" data-tab="order">Open the order</button></div>` : ""}`;
+    } else if (tab === "order") {
+      if (!t || t.status !== "occupied") left = `<p class="tlabel">no seated table selected</p><p style="color:var(--t-muted)">Go to Tables and seat a party first.</p>`;
+      else {
+        const inCart = Object.values(cart).reduce((a, b) => a + b, 0);
+        left = `<div class="cats">${Object.keys(CATS).map((c) => `<button class="tb sm${c === cat ? " on" : ""}" data-cat="${c}">${c}</button>`).join("")}</div>
+          <div class="tiles">${CATS[cat].map((id) => { const it = item(id); return `<button class="tile" data-add="${id}">${cart[id] ? `<span class="q">${cart[id]}</span>` : ""}${esc(it.name)}<small>${money(it.price_cents)}</small></button>`; }).join("")}</div>
+          <div class="opts" style="margin-top:12px"><button class="tb blue" data-addcart="1" ${inCart ? "" : "disabled"}>${o ? "Add" : "Open the bill with"} ${inCart} item${inCart === 1 ? "" : "s"}</button><button class="tb ghost sm" data-clearcart="1" ${inCart ? "" : "disabled"}>Clear</button></div>`;
+      }
+    } else if (tab === "pay") {
+      if (o && o.lines.length) {
+        const tip = tipCents(o), due = o.total_cents + tip;
+        const exact = due, tenders = [...new Set([exact, Math.ceil(due / 1000) * 1000, Math.ceil(due / 5000) * 5000, Math.ceil(due / 10000) * 10000])];
+        if (pay.tendered == null || !tenders.includes(pay.tendered)) pay.tendered = tenders[tenders.length - 1];
+        left = `<p class="tlabel">amount due</p><div class="amount">${money(due)}</div><p style="color:var(--t-muted);margin:0 0 8px">${money(o.total_cents)} bill + ${money(tip)} tip</p>
+          <p class="tlabel">payment</p><div class="opts">${["cash", "card"].map((m) => `<button class="tb sm${pay.method === m ? " on" : ""}" data-method="${m}">${m[0].toUpperCase() + m.slice(1)}</button>`).join("")}</div>
+          <p class="tlabel">tip</p><div class="opts">${[0, 15, 18, 20].map((p) => `<button class="tb sm${pay.tipCustom == null && pay.tipPct === p ? " on" : ""}" data-tip="${p}">${p ? p + "%" : "No tip"}</button>`).join("")}<button class="tb sm${pay.tipCustom === 1000 ? " on" : ""}" data-tipc="1000">$10</button></div>
+          ${pay.method === "cash" ? `<p class="tlabel">cash tendered</p><div class="opts">${tenders.map((c) => `<button class="tb sm${pay.tendered === c ? " on" : ""}" data-tender="${c}">${money(c)}</button>`).join("")}</div>` : ""}
+          <div class="opts" style="margin-top:14px"><button class="tb green" data-charge="1" style="flex:1">Charge ${money(due)}${pay.method === "cash" && pay.tendered > due ? ` · change ${money(pay.tendered - due)}` : ""}</button></div>
+          <p style="color:var(--t-muted);font-size:.76rem;margin:4px 0 0">Two requests: the intent carries the tip; settle captures it, closes the bill, frees the table and writes the drawer in one transaction.</p>`;
+      } else if (last && last.status === "closed") {
+        const p = last.payments.find((x) => ["captured", "partial_refund", "refunded"].includes(x.status));
+        const remaining = p ? p.amount_cents + p.tip_cents - p.refunded_cents : 0;
+        left = `<p class="tlabel">paid</p><div class="amount">${money(last.paid_total_cents + last.service_tips_cents)}</div><p style="color:var(--t-muted);margin:0 0 8px">${esc(last.payment_method)} · bill #${esc(last.order_number)} · ${last.refunded_total_cents ? money(last.refunded_total_cents) + " refunded" : "no refunds"}</p>
+          <p class="tlabel">refund · ${money(remaining)} still refundable</p>
+          <div class="opts"><input id="rfAmt" type="text" inputmode="decimal" placeholder="Amount" value="${esc(refund.amount)}" style="width:90px"><select id="rfReason">${REFUND_REASONS.map((r) => `<option${r === refund.reason ? " selected" : ""}>${r}</option>`).join("")}</select></div>
+          <div class="opts"><button class="tb red sm" data-refund="1" ${remaining > 0 ? "" : "disabled"}>Refund · approved by manager Raj</button></div>
+          ${t.status === "dirty" ? `<p class="tlabel" style="margin-top:14px">table</p><div class="opts"><button class="tb green sm" data-clean="1">Mark ${esc(t.name)} clean</button></div>` : ""}`;
+      } else left = `<p class="tlabel">nothing to pay</p><p style="color:var(--t-muted)">Open a bill with at least one line.</p>`;
+    } else if (tab === "requests") {
+      const rs = pos.db.guest_requests.slice().reverse();
+      left = `<p class="tlabel">guest requests · red after ${POS.SLA_MINUTES} min</p>` + (rs.length ? rs.map((r) => `<div class="opts" style="align-items:center"><span style="min-width:150px"><b>T${r.table_id}</b> · ${esc(r.request_type)} <span style="color:${r.status === "resolved" ? "var(--t-green)" : "var(--t-amber)"}">${esc(r.status)}</span><br><small style="color:var(--t-muted)">due ${r.sla_due_at.slice(11, 16)}</small></span>${r.status === "open" ? `<button class="tb sm" data-ack="${r.id}">Acknowledge</button>` : ""}${["open", "acked"].includes(r.status) ? `<button class="tb sm green" data-resolve="${r.id}">Resolve</button>` : ""}</div>`).join("") : `<p style="color:var(--t-muted)">None. The guest phone can raise one.</p>`);
+    } else if (tab === "manager") {
+      left = `<p class="tlabel">menu prices · manager Raj</p>` + pos.db.menu_item_instances.map((it) => `<div class="opts" style="align-items:center"><span style="min-width:150px">${esc(it.name)} <b>${money(it.price_cents)}</b></span><button class="tb sm" data-price="${it.id}:${it.price_cents - 100}">−$1</button><button class="tb sm" data-price="${it.id}:${it.price_cents + 400}">+$4</button></div>`).join("") + `<p style="color:var(--t-muted);font-size:.76rem;margin-top:8px">Changing a price changes the menu. Lines already on a bill keep the price the cashier saw.</p>`;
     }
+    const shown = o || last;
+    if (shown) {
+      const rounds = {};
+      for (const l of shown.lines) { const k = l.kds_ticket_id ? shown.tickets.find((x) => x.id === l.kds_ticket_id).ticket_number : "not sent"; (rounds[k] = rounds[k] || []).push(l); }
+      const unsent = shown.lines.filter((l) => !l.kds_ticket_id).length;
+      ticket = `<div class="hd">${esc(t.name)} · bill ${shown.id}<small>${shown.is_voided ? `voided by ${esc(shown.voided_by)}: ${esc(shown.void_reason)}` : shown.status === "closed" ? `paid ${esc(shown.payment_method)} · ${shown.closed_at.slice(11, 16)}` : esc(shown.status)}${session(t) ? ` · ${session(t).party_size} guests` : ""}</small></div>
+        <div class="lines">${Object.entries(rounds).map(([k, ls]) => `<div class="round">${k === "not sent" ? "not sent yet" : "round " + k + (shown.tickets.find((x) => x.ticket_number === k).status === "cancelled" ? " · cancelled" : "")}</div>${ls.map((l) => `<div class="ln"><span>${l.quantity}× ${esc(l.name)}${l.notes ? `<small>${esc(l.notes)}</small>` : ""}</span><span>${money(l.quantity * l.price_cents)}</span></div>`).join("")}`).join("")}</div>
+        <div class="tot"><div><span>Subtotal</span><span>${money(shown.subtotal_cents)}</span></div><div><span>Tax</span><span>${money(shown.tax_cents)}</span></div><div class="big"><span>Total</span><span>${money(shown.total_cents)}</span></div>${shown.service_tips_cents ? `<div><span>Tip</span><span>${money(shown.service_tips_cents)}</span></div>` : ""}${shown.refunded_total_cents ? `<div style="color:var(--t-red)"><span>Refunded</span><span>−${money(shown.refunded_total_cents)}</span></div>` : ""}</div>
+        ${o ? `<div class="acts"><button class="tb green" data-send="1" ${unsent ? "" : "disabled"}>Send ${unsent || ""} to kitchen</button><button class="tb blue" data-tab="pay" ${o.lines.length ? "" : "disabled"}>Pay</button><div class="opts" style="margin:0"><select id="voidReason" style="flex:1">${VOID_REASONS.map((r) => `<option${r === voidReason ? " selected" : ""}>${r}</option>`).join("")}</select><button class="tb red sm" data-void="1">Void</button></div></div>` : ""}`;
+    } else ticket = `<div class="hd">No bill<small>${t ? esc(t.name) + " · " + t.status : "select a table"}</small></div><div class="lines"></div>`;
+    $("term").innerHTML = `<div class="top">IPOT POS · Cashier <span>· Mei · ${clock()}</span></div><div class="tabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${tab === k ? "on" : ""}">${l}</button>`).join("")}</div><div class="main"><div class="pane">${left}</div><div class="ticket">${ticket}</div></div>`;
   }
 
-  function renderLedger() {
-    const events = view || ledger.events;
-    $("events").innerHTML = events.length ? events.map((e) =>
-      `<tr class="${highlight && e.seq >= highlight ? "hl" : ""}"><td>${e.seq}</td><td><code>${esc(e.type)}</code></td><td>${esc(e.actor)}</td><td>${esc(describe(e))}</td><td class="hash">${e.prev.slice(0, 8)} → ${e.hash.slice(0, 8)}</td></tr>`).join("")
-      : `<tr><td colspan="5" class="muted">Empty.</td></tr>`;
-    $("anchors").textContent = ledger.anchors.length ? `Anchored: ${ledger.anchors.map((a) => `#${a.seq} ${a.hash.slice(0, 8)}`).join(", ")}` : "No anchors yet.";
-    renderBalances(events);
+  // ---- kitchen display ----
+  function renderKDS() {
+    const ts = pos.db.kds_tickets.slice().reverse();
+    const next = { received: ["Start", "preparing"], preparing: ["Ready", "ready"], ready: ["Served", "served"] };
+    $("kds").innerHTML = `<div class="top">Kitchen display <span>· Wen · ${clock()}</span></div>` + (ts.length ? `<div class="kcards">${ts.map((k) => { const o = pos.db.orders.find((x) => x.id === k.order_id); return `<div class="kcard ${k.status}"><div class="kh"><span>${esc(k.ticket_number)}</span><span>T${o.table_id} · ${k.created_at.slice(11, 16)}</span></div><ul>${k.items.map((i) => `<li>${i.qty}× ${esc(i.name)}${i.notes ? `<small>${esc(i.notes)}</small>` : ""}</li>`).join("")}</ul><div class="kb">${next[k.status] ? `<button class="tb sm" data-kds="${k.id}:${next[k.status][1]}">${next[k.status][0]}</button>` : `<span style="color:var(--t-muted);font-size:.76rem">${esc(k.status)}</span>`}</div></div>`; }).join("")}</div>` : `<p style="padding:14px;color:var(--t-muted)">No tickets. Send an order from the terminal; it arrives here over the <code style="background:#0f141e">kds</code> room.</p>`);
   }
 
-  function renderBalances(events) {
-    const s = L.project(events), t = s.totals;
-    $("stats").innerHTML = [["Sales", t.sales], ["Tips", t.tips], ["Refunds", t.refunds], ["Net", t.net], ["Cash drawer", t.cashDrawer]]
-      .map(([k, v]) => `<div><b>${m(v)}</b><span>${k}</span></div>`).join("");
-    const bills = Object.values(s.bills);
-    $("bills").innerHTML = bills.length ? bills.map((b) => {
-      const p = b.payment ? s.payments[b.payment] : null;
-      const pay = p ? `${p.id} · ${p.method} · ${m(p.amountCents + p.tipCents)} · ${p.status}${p.refundedCents ? ` (${m(p.refundedCents)} back)` : ""}` : "—";
-      return `<tr><td>${esc(b.id)}</td><td>${esc(b.table)}</td><td>${esc(b.status)}${b.voidReason ? `: “${esc(b.voidReason)}”` : ""}</td><td>${m(b.totalCents)}</td><td>${esc(pay)}</td></tr>`;
-    }).join("") : `<tr><td colspan="5" class="muted">No bills.</td></tr>`;
-    const checks = L.invariants(events);
-    $("checks").innerHTML = checks.length ? checks.map((c) => `<li><span class="pill ${c.ok ? "ok" : "bad"}">${c.ok ? "holds" : "broken"}</span><span>${esc(c.name)}</span></li>`).join("") : `<li class="muted">Run the shift first.</li>`;
-    const opts = Object.values(s.payments).map((p) => `<option value="${esc(p.id)}">${esc(p.id)} (${esc(p.bill)}, ${m(p.amountCents + p.tipCents - p.refundedCents)} left)</option>`).join("");
-    $("rfPayment").innerHTML = opts || `<option value="">No payments yet</option>`;
+  // ---- guest phone ----
+  function phoneTable() {
+    if (sel && table(sel).status === "occupied") return table(sel);
+    return pos.db.tables.find((t) => t.status === "occupied") || null;
+  }
+  function renderPhone() {
+    const t = phoneTable(), s = t ? session(t) : null, o = t ? openOrder(t) : null;
+    if (!t || !s) { $("phone").innerHTML = `<div class="ph">IPOT</div><div class="ps">Scan the QR code on your table</div><div class="pcard" style="color:#5F686B">No table seated yet.</div>`; return; }
+    const reqs = pos.db.guest_requests.filter((r) => r.table_session_id === s.id);
+    $("phone").innerHTML = `<div class="ph">${esc(t.name)} · IPOT</div><div class="ps">Party of ${s.party_size} · session ${esc(s.id)}</div>
+      <div class="pcard"><b>Your bill so far</b>${o && o.lines.length ? `<div style="margin-top:4px">${o.lines.map((l) => `<div class="req"><span>${l.quantity}× ${esc(l.name)}</span><span>${money(l.quantity * l.price_cents)}</span></div>`).join("")}<div class="req" style="font-weight:700"><span>Total incl. tax</span><span>${money(o.total_cents)}</span></div></div>` : `<div style="color:#5F686B;margin-top:2px">Nothing ordered yet.</div>`}</div>
+      <div class="pcard"><b>Need something?</b><button class="pb" data-req="call">Call a server</button><button class="pb sec" data-req="cash">Bring the bill</button><button class="pb sec" data-req="split">Split the bill</button>
+      ${reqs.length ? `<div style="margin-top:8px">${reqs.map((r) => `<div class="req"><span>${esc(r.request_type)}</span><span style="color:${r.status === "resolved" ? "#1E7A45" : "#8A5A00"}">${r.status === "resolved" ? "done" : r.status === "acked" ? "on the way" : "sent"}</span></div>`).join("")}</div>` : ""}</div>`;
   }
 
-  function logLine(entry) {
-    const cls = !entry.ok ? "bad" : entry.replay ? "warn" : "ok";
-    const tag = !entry.ok ? "refused" : entry.replay ? "no new charge" : "recorded";
-    const why = !entry.ok ? `<span class="why">${esc(entry.reason)}</span>` : entry.replay ? `<span class="why">same key, so the first payment is returned</span>` : "";
-    return `<li><span class="pill ${cls}">${tag}</span><span>${esc(entry.label)} ${why}</span></li>`;
+  // ---- trace ----
+  const ROLE_OF = { term: "cashier", kds: "kitchen", phone: "guest", manager: "manager" };
+  function renderTrace() {
+    const list = $("traceList"), entries = pos.log.slice(traceSeen);
+    if (!entries.length) return;
+    if (traceSeen === 0) list.innerHTML = "";
+    document.querySelectorAll(".tr.new").forEach((d) => d.classList.remove("new"));
+    for (const e of entries) {
+      const st = e.status === 0 ? "bad" : e.status >= 400 ? "bad" : "ok";
+      const rows = e.writes.length ? `<div class="rows">${e.writes.map((w) => `<div><b>${esc(w.table)}</b> ${w.op} #${esc(w.id)} ${pretty(w.fields)}</div>`).join("")}</div>` : `<p class="why" style="margin:6px 0 0">Rows written: <b>0</b>. ${e.status >= 400 ? "The transaction was rolled back." : ""}</p>`;
+      const ws = e.ws.length ? `<p class="why" style="margin:6px 0 0">WebSocket → ${e.ws.map((m) => `<span class="chip">${esc(m.room)}: ${esc(m.message.event)}</span>`).join("")}</p>` : "";
+      const d = document.createElement("details");
+      d.className = "tr new";
+      d.innerHTML = `<summary><span class="role">${esc(e.role || "api")}</span><span class="m">${esc(e.method)}</span><span class="p">${esc(e.path)}</span><span class="pill ${st}">${e.status === 0 ? "died" : e.status}${e.response && e.response.code ? " · " + esc(e.response.code) : ""}</span><span class="muted" style="font-size:.76rem">${e.writes.length} row${e.writes.length === 1 ? "" : "s"} written${e.ws.length ? " · WebSocket" : ""}</span>${e.status >= 400 ? `<span class="muted" style="font-size:.78rem;flex-basis:100%">${esc(e.response.detail)}</span>` : ""}</summary>
+        <div class="bd"><div class="path"><span class="chip on">${esc(e.router || "no route")}</span><span class="muted">→</span><span class="chip on">${esc(e.service || "—")}</span><span class="muted">→</span>${e.models.length ? e.models.map((m) => `<span class="chip">${esc(m)}</span>`).join("") : '<span class="chip">no model touched</span>'}</div>
+        ${Object.keys(e.body).length ? `<pre>${pretty(e.body)}</pre>` : ""}${e.status < 400 && e.status !== 0 ? `<pre style="margin-top:6px">${pretty(e.response)}</pre>` : ""}${rows}${ws}</div>`;
+      list.prepend(d);
+    }
+    traceSeen = pos.log.length;
+    $("traceCount").textContent = `${pos.log.length} request${pos.log.length === 1 ? "" : "s"}`;
+    const c = pos.checks(), bad = c.filter((x) => !x.ok).length;
+    $("checkLine").innerHTML = c.length ? `${c.length} invariants recomputed from the rows after every request: <span class="pill ${bad ? "bad" : "ok"}">${bad ? bad + " broken" : "all hold"}</span> <span class="muted">(bill totals from price snapshots, tips only from captured payments, refunds never above what was charged, cash drawer equals cash in minus cash out, closed bills fully paid and off their table)</span>` : "";
   }
+  function renderAll() { renderTerm(); renderKDS(); renderPhone(); renderTrace(); }
 
-  function reset() {
-    ledger = new L.Ledger(); view = null; highlight = null;
-    $("actionLog").innerHTML = `<li class="muted">Nothing yet.</li>`;
-    $("verifyResult").innerHTML = ""; $("attackResult").innerHTML = ""; $("restore").hidden = true;
-    $("rfResult").textContent = "Run the shift first so there are payments to refund.";
-    renderLedger();
+  // ---- terminal actions ----
+  function seat(n) { flash("term"); const e = act("cashier", "POST", `/tables/${sel}/seat`, { party_size: n }); if (e.status < 300) { tab = "order"; renderTerm(); } return e; }
+  function addToCart(id) { cart[id] = (cart[id] || 0) + 1; renderTerm(); }
+  function commitCart() {
+    const items = Object.entries(cart).map(([id, qty]) => ({ instance_id: id, qty }));
+    if (!items.length) return null;
+    flash("term");
+    const t = table(sel), o = openOrder(t);
+    const e = o ? act("cashier", "PATCH", `/orders/${o.id}/items`, { items }) : act("cashier", "POST", "/orders", { table_id: sel, items });
+    if (e.status < 300) { cart = {}; renderTerm(); }
+    return e;
   }
+  function send() { flash("term"); const o = openOrder(table(sel)); return o ? act("cashier", "POST", `/orders/${o.id}/submit`) : null; }
+  function charge() {
+    flash("term");
+    const o = openOrder(table(sel)); if (!o) return null;
+    const tip = tipCents(o);
+    const i = act("cashier", "POST", "/payments/intent", { order_id: o.id, payment_method: pay.method, tip_cents: tip });
+    if (i.status >= 300) return i;
+    const body = { payment_intent_id: i.response.payment_intent_id, table_status: "dirty" };
+    if (pay.method === "cash") body.amount_tendered_cents = pay.tendered;
+    const e = act("cashier", "POST", `/orders/${o.id}/settle`, body);
+    if (e.status < 300) { refund.amount = ""; renderTerm(); }
+    return e;
+  }
+  function doRefund(amountCents, reason) {
+    flash("term");
+    const last = lastOrder(table(sel)); if (!last) return null;
+    const p = last.payments.find((x) => ["captured", "partial_refund"].includes(x.status)); if (!p) return null;
+    return act("manager", "POST", `/payments/${p.intent_id}/refund`, { amount_cents: amountCents, reason, approved_by: "manager:raj" }, "manager:raj");
+  }
+  function doVoid(reason) { flash("term"); const o = openOrder(table(sel)); if (!o) return null; const e = act("manager", "PATCH", `/orders/${o.id}`, { is_voided: true, void_reason: reason }, "manager:raj"); if (e.status < 300) { tab = "tables"; renderTerm(); } return e; }
+  function clean() { flash("term"); const e = act("cashier", "PATCH", `/tables/${sel}/floor-status`, { status: "available" }, "server:ana"); if (e.status < 300) { tab = "tables"; renderTerm(); } return e; }
+  function setPrice(id, cents) { flash("term"); return act("manager", "PATCH", `/menu-items/${id}/price`, { price_cents: cents }, "manager:raj"); }
+  function kdsSet(id, status) { flash("kds"); return act("kitchen", "PATCH", `/kds/tickets/${id}`, { status }, "kitchen:wen"); }
+  function guestReq(type) { flash("phone"); const t = phoneTable(), s = t && session(t); return s ? act("guest", "POST", "/customer/guest-requests", { table_session_id: s.id, request_type: type }, "guest") : null; }
+  function reqSet(id, status) { flash("term"); return act("cashier", "PATCH", `/guest-requests/${id}`, { status, outcome: "done" }, "server:ana"); }
 
-  $("runShift").addEventListener("click", async () => {
-    reset();
-    $("runShift").disabled = true;
-    const log = await LedgerTests.sampleShift(ledger);
-    $("actionLog").innerHTML = log.map(logLine).join("");
-    $("rfResult").textContent = "";
-    renderLedger();
-    $("runShift").disabled = false;
+  $("term").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-tab],[data-t],[data-seat],[data-clean],[data-cat],[data-add],[data-addcart],[data-clearcart],[data-send],[data-method],[data-tip],[data-tipc],[data-tender],[data-charge],[data-refund],[data-void],[data-ack],[data-resolve],[data-price]");
+    if (!b) return;
+    const d = b.dataset;
+    if (d.tab) { tab = d.tab; renderTerm(); }
+    else if (d.t) { sel = +d.t; renderAll(); }
+    else if (d.seat) seat(+d.seat);
+    else if (d.clean) clean();
+    else if (d.cat) { cat = d.cat; renderTerm(); }
+    else if (d.add) addToCart(d.add);
+    else if (d.addcart) commitCart();
+    else if (d.clearcart) { cart = {}; renderTerm(); }
+    else if (d.send) send();
+    else if (d.method) { pay.method = d.method; renderTerm(); }
+    else if (d.tip !== undefined) { pay.tipPct = +d.tip; pay.tipCustom = null; renderTerm(); }
+    else if (d.tipc) { pay.tipCustom = +d.tipc; renderTerm(); }
+    else if (d.tender) { pay.tendered = +d.tender; renderTerm(); }
+    else if (d.charge) charge();
+    else if (d.refund) { const raw = $("rfAmt").value.trim(); refund.amount = raw; refund.reason = $("rfReason").value; const cents = raw === "" ? null : Math.round(parseFloat(raw) * 100); doRefund(Number.isFinite(cents) ? cents : null, refund.reason); }
+    else if (d.void) { voidReason = $("voidReason").value; doVoid(voidReason); }
+    else if (d.ack) reqSet(+d.ack, "acked");
+    else if (d.resolve) reqSet(+d.resolve, "resolved");
+    else if (d.price) { const [id, c] = d.price.split(":"); setPrice(id, +c); }
   });
-  $("resetAll").addEventListener("click", reset);
+  $("term").addEventListener("keydown", (ev) => { const b = ev.target.closest("[data-t]"); if (b && (ev.key === "Enter" || ev.key === " ")) { ev.preventDefault(); sel = +b.dataset.t; renderAll(); } });
+  $("kds").addEventListener("click", (ev) => { const b = ev.target.closest("[data-kds]"); if (!b) return; const [id, st] = b.dataset.kds.split(":"); kdsSet(+id, st); });
+  $("phone").addEventListener("click", (ev) => { const b = ev.target.closest("[data-req]"); if (b) guestReq(b.dataset.req); });
+  $("resetPos").addEventListener("click", () => { stopTour(); resetState(); renderAll(); flash(null); $("caption").textContent = ""; });
 
-  $("rfGo").addEventListener("click", async () => {
-    if (view) { $("rfResult").textContent = "Restore the real ledger first."; return; }
-    const dollars = $("rfAmount").value.trim();
-    if (!/^\d+(\.\d{1,2})?$/.test(dollars)) { $("rfResult").textContent = "Enter an amount like 20 or 20.50."; return; }
-    const cents = Math.round(Number(dollars) * 100);
-    const r = await ledger.refund($("rfPayment").value, { amountCents: cents, reason: $("rfReason").value, approvedBy: $("rfApprover").value.trim() }, "cashier:you");
-    $("rfResult").innerHTML = r.ok ? `<span class="pill ok">recorded</span> event #${r.event.seq}` : `<span class="pill bad">refused</span> ${esc(r.reason)}`;
-    renderLedger();
-  });
-
-  function showVerify(target, v, label) {
-    target.innerHTML = `<div class="result ${v.ok ? "ok" : "bad"}">${label ? `<b>${esc(label)}:</b> ` : ""}${v.ok ? `chain ok: ${v.count} events, head ${v.head.slice(0, 12)}…` : `broken at #${v.at}: ${esc(v.reason)}`}</div>`;
+  // ---- the tour ----
+  let tourToken = 0;
+  function stopTour() { tourRunning = false; tourToken += 1; $("tour").hidden = false; $("stopTour").hidden = true; }
+  async function runTour() {
+    resetState(); renderAll();
+    tourRunning = true; const token = ++tourToken;
+    $("tour").hidden = true; $("stopTour").hidden = false;
+    const say = (s) => { $("caption").textContent = s; };
+    const step = async (cap, fn, ms) => { if (token !== tourToken) throw new Error("stopped"); say(cap); fn(); await sleep(ms || 1300); };
+    try {
+      await step("Seat a party of three at T3.", () => { sel = 3; tab = "tables"; renderAll(); flash("term"); }, 900);
+      await step("Seat a party of three at T3.", () => seat(3));
+      await step("Round 1: two beef sets, a vegetable platter, three teas. Each line stores the price it was ordered at.", () => { cart = { beef: 2, veg: 1, tea: 3 }; renderTerm(); }, 1100);
+      await step("Open the bill: one POST /orders, five rows.", () => commitCart());
+      await step("Send to the kitchen: ticket 3-1 goes out over the kds room.", () => send());
+      await step("The kitchen cooks round 1. Each status change is broadcast to the cashier room.", () => kdsSet(1, "preparing"), 900);
+      await step("The kitchen cooks round 1.", () => kdsSet(1, "ready"), 900);
+      await step("Served. The bill's status is derived from every round, not the last one touched.", () => kdsSet(1, "served"));
+      await step("The manager raises Beef set from $28 to $32.", () => { tab = "manager"; renderTerm(); }, 900);
+      await step("The manager raises Beef set from $28 to $32. Bills already open keep $28.", () => setPrice("beef", 3200));
+      await step("Round 2: one more beef set at $32, and noodles. The two beef sets from round 1 stay $28.", () => { tab = "order"; cart = { beef: 1, noodles: 1 }; renderTerm(); }, 1100);
+      await step("Round 2: one more beef set at $32, and noodles. The two beef sets from round 1 stay $28.", () => commitCart());
+      await step("Send again: only the two new lines go out, as ticket 3-2.", () => send());
+      await step("The guest taps “Call a server”.", () => guestReq("call"), 1000);
+      await step("The guest taps it again. The second tap returns the existing request; nothing is queued twice.", () => guestReq("call"));
+      await step("A server resolves it from the Requests tab before the 3-minute SLA.", () => { tab = "requests"; renderTerm(); flash("term"); }, 900);
+      await step("A server resolves it from the Requests tab before the 3-minute SLA.", () => reqSet(1, "resolved"));
+      await step("Pay: cash, 18% tip, $150 tendered.", () => { tab = "pay"; pay = { method: "cash", tipPct: 18, tipCustom: null, tendered: null }; renderTerm(); flash("term"); }, 1300);
+      await step("Charge: the intent carries the tip, then settle captures, closes, frees T3 and writes the drawer in one commit. Seven models.", () => charge(), 1800);
+      await step("Refund $9 for the cold noodles: reason and approver land in the audit row; cash leaves the drawer.", () => { refund.amount = "9.00"; renderTerm(); }, 900);
+      await step("Refund $9 for the cold noodles: reason and approver land in the audit row; cash leaves the drawer.", () => doRefund(900, "item arrived cold"));
+      await step("T3 is cleaned. The floor status is written explicitly.", () => clean());
+      await step("A second party at T5 orders, then leaves before the food.", () => { sel = 5; tab = "tables"; renderAll(); flash("term"); }, 900);
+      await step("A second party at T5 orders, then leaves before the food.", () => seat(2), 900);
+      await step("A second party at T5 orders, then leaves before the food.", () => { cart = { veg: 1, tea: 2 }; commitCart(); }, 900);
+      await step("A second party at T5 orders, then leaves before the food.", () => send());
+      await step("Void: who and why are recorded, both rounds are cancelled on the kitchen screen, the table is freed.", () => doVoid("guests left before the food"), 1500);
+      await step("Someone tries to take payment on the voided bill: 409 ORDER_LOCKED, zero rows written.", () => { flash("term"); act("cashier", "POST", "/payments/intent", { order_id: 2, payment_method: "card" }); }, 1800);
+      say("Done. Every request above is in the trace; every invariant still holds. Drive it yourself from here.");
+    } catch (e) { if (e.message !== "stopped") throw e; }
+    if (token === tourToken) { tourRunning = false; $("tour").hidden = false; $("stopTour").hidden = true; }
+    flash(null);
   }
+  $("tour").addEventListener("click", runTour);
+  $("stopTour").addEventListener("click", () => { stopTour(); $("caption").textContent = "Stopped. Keep going by hand."; });
+  resetState(); renderAll();
 
-  $("verify").addEventListener("click", async () => {
-    const events = view || ledger.events;
-    if (!events.length) { $("verifyResult").innerHTML = `<div class="result">Run the shift first.</div>`; return; }
-    showVerify($("verifyResult"), await L.verify(events, ledger.anchors), view ? "Tampered copy" : "");
-  });
-  $("anchor").addEventListener("click", () => {
-    if (view) { $("verifyResult").innerHTML = `<div class="result">Restore the real ledger before anchoring.</div>`; return; }
-    if (!ledger.anchor()) { $("verifyResult").innerHTML = `<div class="result">Nothing to anchor yet.</div>`; return; }
-    renderLedger();
+  // ================= 2. platform diagram =================
+  const NODES = [
+    { id: "cashier", x: 20, y: 20, w: 170, h: 54, t: "Cashier station", s: "Next.js · checkout, drawer", own: "part" },
+    { id: "manager", x: 205, y: 20, w: 170, h: 54, t: "Manager web", s: "Next.js · menu, tables, reports", own: "team" },
+    { id: "ios", x: 390, y: 20, w: 170, h: 54, t: "iOS station", s: "Swift · floor plan, shifts", own: "part" },
+    { id: "qr", x: 575, y: 20, w: 170, h: 54, t: "Guest QR app", s: "Next.js · order, request, pay", own: "part" },
+    { id: "kds", x: 760, y: 20, w: 170, h: 54, t: "Kitchen display", s: "WebSocket · kds, cashier", own: "team" },
+    { id: "routers", x: 40, y: 150, w: 460, h: 50, t: "Routers · 31 files", s: "validate the shape, name the service, shape the response", own: "mine", layer: true },
+    { id: "services", x: 40, y: 214, w: 460, h: 50, t: "Services · 42 classes", s: "every business rule; one action = one transaction", own: "mine", layer: true },
+    { id: "models", x: 40, y: 278, w: 460, h: 50, t: "Models · SQLAlchemy + Alembic", s: "snapshots, audit columns, tickets, drawer", own: "mine", layer: true },
+    { id: "postgres", x: 515, y: 190, w: 105, h: 90, t: "PostgreSQL", s: "one schema", own: "team" },
+    { id: "reservation", x: 700, y: 150, w: 230, h: 76, t: "Reservation API", s: "FastAPI · Postgres · Twilio Verify", s2: "from the first commit · in production", own: "mine" },
+    { id: "nalu", x: 700, y: 252, w: 230, h: 76, t: "Nalu guest assistant", s: "EN/ZH · reads the POS read-only", s2: "books via Reservation API · pre-launch", own: "mine" },
+  ];
+  const DETAIL = {
+    cashier: ["Cashier station (Next.js)", "Team-built screens for checkout, live orders, the kitchen display and printer settings. Mine: the staff rota and cash-drawer screens, and the settle, refund and rounds endpoints the checkout screen now calls.", "Talks to: routers/orders.py, payments.py, cash_drawer.py, shifts.py, schedules.py"],
+    manager: ["Manager web (Next.js)", "Team-built: menu builder, tables, transactions, reports, schedule. It changes menu prices; the bills already open keep the price the cashier saw.", "Talks to: routers/menu_items.py, tables.py, reports.py, transactions.py"],
+    ios: ["iOS station (Swift)", "Team-built floor plan, login and shift screens. On 11 Sep it asked for 11 things the API could not do; I wrote the contract answering them (e520b80) and shipped the endpoints behind it: many rounds per bill, atomic settle, a writable floor status, refunds and voids. The POS repo owns the schema; the iOS repo may not generate migrations.", "Talks to: routers/tables.py, orders.py, kds.py, shifts.py"],
+    qr: ["Guest QR app (Next.js)", "Team shell, menus and i18n. Mine: the Nalu ordering flow with its payment step, Twilio Verify phone sign-in, staged QR routing table by table, and the public guest-request endpoint keyed only by the table session so a guest can call a server, ask for the bill, or split it without an account.", "Talks to: routers/guest_requests.py (public), customer.py, tracking.py"],
+    kds: ["Kitchen display", "Team-built screen over WebSocket rooms kds and cashier. Mine: tickets numbered bill-round and owned by the API, a note per line carried onto the ticket, status received → preparing → ready → served, and order status derived from every round rather than the last one touched.", "Talks to: routers/kds.py; ConnectionManager.broadcast_to_room"],
+    routers: ["Routers (31 files)", "Validate the request body, resolve the current user, call exactly one service method, shape the response. No queries and no business rules. Error helpers raise_409 and raise_422 add an X-Error-Code header (ORDER_LOCKED, TABLE_OCCUPIED, GUEST_REQUEST_INVALID_TRANSITION) so clients branch on a code, not on prose.", "Layering rule I set and enforced in review: new code must not add db.query() or select() to a router. Existing violations are logged as debt, not copied."],
+    services: ["Services (42 classes)", "Where every rule lives, and where the transaction begins and ends. Mine: OrderService.settle_order, PaymentService.capture_in_transaction and refund_payment, KDSService.submit_order (rounds), GuestRequestService, TableService.set_floor_status, ShiftService reconcile, the scheduling service. Team: menu, category, printer, report, loyalty and the rest.", "One business action = one commit. A service that calls another service passes the same session; nothing commits halfway."],
+    models: ["Models (SQLAlchemy + Alembic)", "Columns that carry the rules: order_items.price and tax_rate are snapshots taken when the line is ordered; order_items.kds_ticket_id links a line to the round it went out on; payments carry the tip and refunded_amount; orders carry voided_by, void_reason, reopened_by, refund_status. During the May merge storm I repaired diverged Alembic heads four times and added a migration safety checklist.", "Schema changes go through Alembic; the POS repo is the single owner."],
+    postgres: ["PostgreSQL", "One database for the POS. Queries are a mix of legacy db.query() and SQLAlchemy 2.0 select(); the rule is that new code uses select() and touched modules are converted one at a time rather than in a mass refactor.", "Team-built Docker stack; I added the staging deploy workflow."],
+    reservation: ["Reservation API", "A separate FastAPI service I built from the first commit (64 of 79 commits): time-slot capacity, Twilio Verify OTP, confirmation SMS with self-service reschedule and cancel links, delivery-status callbacks, guest check-in with early and late approval, loyalty, a staff portal, UTM attribution with a callback to the marketing system. In production with real guests.", "Kept out of the POS on purpose: a booking's lifecycle has nothing to do with a bill's, and the POS was mid-merge-storm at the time."],
+    nalu: ["Nalu guest assistant", "Bilingual chat for hours, menu and reservations. It reads the POS read-only and books only through the Reservation API; the booking path makes zero model calls after I measured the LLM-only pilot at 57% fully correct. I moved the assistant out of the POS process: one process meant shared deploys, keys and failure surface.", "Boundary: no POS ORM imports, no POS write methods, guest tokens never stored or sent to inference."],
+  };
+  (function drawDiagram() {
+    const s = ['<svg viewBox="0 0 950 350" role="img" aria-label="Architecture: five clients call the POS API, which is three layers over PostgreSQL; the Reservation API and Nalu sit beside it.">',
+      '<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" style="color:var(--muted)"/></marker></defs>',
+      '<g class="group"><rect x="24" y="118" width="606" height="220" rx="10"/><text x="36" y="136">POS API · FastAPI · Router → Service → Model</text></g>',
+      '<text class="lbl" x="24" y="105">clients</text><text class="lbl" x="700" y="136">neighbouring services</text>'];
+    ["M105 74 L105 150", "M290 74 L290 150", "M475 74 L475 150", "M660 74 L660 118 L400 118 L400 150", "M845 74 L845 100 L250 100 L250 150", "M500 303 L515 265", "M270 264 L270 278", "M270 200 L270 214", "M815 226 L815 252", "M700 290 L632 290"]
+      .forEach((d, i) => s.push(`<path class="edge${i >= 9 ? " dash" : ""}" d="${d}"/>`));
+    s.push('<text class="lbl" x="636" y="283">read-only</text><text class="lbl" x="822" y="244">books through</text><text class="lbl" x="352" y="112">order · request · pay</text><text class="lbl" x="770" y="97">WebSocket</text>');
+    for (const n of NODES) s.push(`<g class="node ${n.own}${n.layer ? " layer" : ""}" data-node="${n.id}" tabindex="0" role="button" aria-label="${esc(n.t)}"><rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" rx="8"/><text x="${n.x + 12}" y="${n.y + 22}" font-weight="600">${esc(n.t)}</text><text class="sub" x="${n.x + 12}" y="${n.y + 40}">${esc(n.s)}</text>${n.s2 ? `<text class="sub" x="${n.x + 12}" y="${n.y + 56}">${esc(n.s2)}</text>` : ""}</g>`);
+    s.push("</svg>");
+    $("diagram").innerHTML = s.join("");
+    const select = (id) => { document.querySelectorAll(".node").forEach((g) => g.classList.toggle("sel", g.dataset.node === id)); const d = DETAIL[id]; $("nodeDetail").innerHTML = `<h3>${esc(d[0])}</h3><p style="margin-bottom:6px">${esc(d[1])}</p><p class="why" style="margin:0">${esc(d[2])}</p>`; };
+    document.querySelectorAll(".node").forEach((g) => { g.addEventListener("click", () => select(g.dataset.node)); g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(g.dataset.node); } }); });
+  })();
+
+  // ================= 3. four calls vs one transaction =================
+  function mealReady() {
+    const p = new Pos();
+    p.request("POST", "/tables/3/seat", { party_size: 3 });
+    p.request("POST", "/orders", { table_id: 3, items: [{ instance_id: "beef", qty: 2 }, { instance_id: "veg", qty: 1 }, { instance_id: "tea", qty: 3 }] });
+    p.request("POST", "/orders/1/submit");
+    p.request("PATCH", "/menu-items/beef/price", { price_cents: 3200 }, "manager:raj");
+    p.request("PATCH", "/orders/1/items", { items: [{ instance_id: "beef", qty: 1 }, { instance_id: "noodles", qty: 1, notes: "less salt" }] });
+    p.request("POST", "/orders/1/submit");
+    p.request("POST", "/payments/intent", { order_id: 1, payment_method: "cash", tip_cents: 1000 });
+    return p;
+  }
+  function stateTable(s, calls) {
+    const rows = [["Payment captured", s.captured], ["Bill closed", s.closed], ["Table freed", s.freed], ["Drawer written", s.drawer]];
+    return `<ul class="log" style="margin-bottom:8px">${calls.map((x) => `<li><span class="pill ${x.status === 0 ? "bad" : x.status >= 400 ? "bad" : "ok"}">${x.status === 0 ? "died" : x.status}</span><span>${esc(x.label)}</span></li>`).join("")}</ul><div class="tbl"><table class="cmp"><tbody>${rows.map(([n, v]) => `<tr><td>${n}</td><td class="${v ? "tick" : "cross"}">${v ? "✓ yes" : "✗ no"}</td></tr>`).join("")}</tbody></table></div>`;
+  }
+  $("runCmp").addEventListener("click", () => {
+    const v = $("crash").value, after = v === "" ? null : +v;
+    const L = mealReady(), legacy = L.legacySettle(1, "pi_1", 15000, after), ls = L.settlementState(1);
+    const verdictL = ls.consistent ? (ls.captured ? "Consistent: all four calls completed." : "Consistent: nothing happened yet.") : `Inconsistent: ${ls.captured ? "the guest has paid" : ""}${ls.closed ? ", the bill is closed" : ""}${!ls.freed ? ", the table still shows the party seated" : ""}${!ls.drawer ? ", the drawer does not know about the cash" : ""}. Someone finds out at the end of the shift.`;
+    $("cmpLegacy").innerHTML = stateTable(ls, legacy.map((x) => ({ status: x.status, label: x.entry ? `${x.entry.method} ${x.entry.path}` : `${x.step}: process died before this call` }))) + `<div class="result ${ls.consistent ? "ok" : "bad"}">${esc(verdictL)}</div>`;
+    const A = mealReady();
+    A.crashPoint = after === 1 ? "after_capture" : after === 2 ? "after_close" : after === 3 ? "after_table" : null;
+    const e = A.request("POST", "/orders/1/settle", { payment_intent_id: "pi_1", amount_tendered_cents: 15000 }), as = A.settlementState(1);
+    let extra = "";
+    if (!as.captured) { A.crashPoint = null; const r = A.request("POST", "/orders/1/settle", { payment_intent_id: "pi_1", amount_tendered_cents: 15000 }); extra = `<p class="why" style="margin:8px 0 0">Retry: <span class="pill ok">${r.status}</span> settled on the second attempt.</p>`; }
+    $("cmpAtomic").innerHTML = stateTable(as, [{ status: e.status, label: "POST /orders/1/settle" + (e.crashed ? ` · ${e.response.detail}` : "") }]) + `<div class="result ok">${as.captured ? "Consistent: all four landed in one commit." : "Consistent: the transaction rolled back, zero rows written. The till gets no response, retries, and the retry succeeds because nothing was half-done."}</div>` + extra;
   });
 
-  document.querySelectorAll("[data-attack]").forEach((b) => b.addEventListener("click", async () => {
-    const events = ledger.events;
-    const refund = events.find((e) => e.type === "payment_refunded" && e.data.amountCents === 900);
-    const voided = events.find((e) => e.type === "bill_voided");
-    if (!refund || !voided) { $("attackResult").innerHTML = `<div class="result">Run the sample shift first.</div>`; return; }
-    if (!ledger.anchors.length) ledger.anchor();
-    const kind = b.dataset.attack;
-    let forged, seq;
-    if (kind === "edit") { seq = refund.seq; forged = L.editInPlace(events, seq, (d) => { d.amountCents = 100; }); }
-    else if (kind === "delete") { seq = voided.seq; forged = L.deleteEvent(events, seq); }
-    else { seq = refund.seq; forged = await L.rewriteAndRehash(events, seq, (d) => { d.amountCents = 100; }); }
-    view = forged; highlight = seq;
-    renderLedger();
-    const alone = await L.verify(forged), anchored = await L.verify(forged, ledger.anchors);
-    const box = document.createElement("div");
-    showVerify(box, alone, "Chain alone");
-    const box2 = document.createElement("div");
-    showVerify(box2, anchored, `Against the anchor (#${ledger.anchors[ledger.anchors.length - 1].seq})`);
-    const note = kind === "rehash"
-      ? "The rows agree with each other again, so the chain alone looks fine. Only the anchored hash, kept outside the database, gives the rewrite away."
-      : kind === "delete"
-        ? "A row is missing, so the numbering and the link to the previous hash break right where it was."
-        : "The altered row no longer matches its hash, so verification stops right there.";
-    $("attackResult").innerHTML = box.innerHTML + box2.innerHTML + `<p class="why" style="margin-top:8px">${note} The ledger and balances above now show the tampered copy.</p>`;
-    $("restore").hidden = false;
+  // ================= 4. try to break it =================
+  function settledShift() {
+    const p = mealReady();
+    p.request("POST", "/orders/1/settle", { payment_intent_id: "pi_1", amount_tendered_cents: 15000 });
+    p.request("POST", "/tables/5/seat", { party_size: 2 });
+    p.request("POST", "/orders", { table_id: 5, items: [{ instance_id: "tea", qty: 2 }] });
+    p.request("POST", "/orders/2/submit");
+    return p;
+  }
+  const RULES = [
+    ["Refund more than what is left", (p) => p.request("POST", "/payments/pi_1/refund", { amount_cents: 20000, reason: "test", approved_by: "manager:raj" }, "manager:raj")],
+    ["Refund without a reason", (p) => p.request("POST", "/payments/pi_1/refund", { amount_cents: 500 }, "manager:raj")],
+    ["Settle the same bill twice", (p) => p.request("POST", "/orders/1/settle", { payment_intent_id: "pi_1", amount_tendered_cents: 15000 })],
+    ["Close the unpaid bill 2 with PATCH status=closed", (p) => p.request("PATCH", "/orders/2", { status: "closed" })],
+    ["Settle bill 2 with a tip-only intent that belongs to bill 1", (p) => { p.request("POST", "/payments/intent", { order_id: 1, payment_method: "cash", tip_cents: 500 }); return p.request("POST", "/orders/2/settle", { payment_intent_id: "pi_2", amount_tendered_cents: 5000 }); }],
+    ["Add a tea to the settled bill", (p) => p.request("PATCH", "/orders/1/items", { items: [{ instance_id: "tea", qty: 1 }] })],
+    ["Pull back a line the kitchen already has", (p) => p.request("DELETE", "/orders/2/items/6")],
+    ["Void without a reason", (p) => p.request("PATCH", "/orders/2", { is_voided: true }, "manager:raj")],
+    ["Reopen bill 1 after a refund", (p) => { p.request("POST", "/payments/pi_1/refund", { amount_cents: 400, reason: "tea not served", approved_by: "manager:raj" }, "manager:raj"); return p.request("POST", "/orders/1/reopen", { reason: "add dessert" }, "manager:raj"); }],
+    ["Seat a new party at the occupied T5", (p) => p.request("POST", "/tables/5/seat", { party_size: 4 })],
+    ["Mark ticket 2-1 served while it is still received", (p) => p.request("PATCH", "/kds/tickets/3", { status: "served" }, "kitchen:wen")],
+    ["Guest request on a closed table session", (p) => p.request("POST", "/customer/guest-requests", { table_session_id: "ts_1", request_type: "cash" }, "guest")],
+  ];
+  $("ruleButtons").innerHTML = RULES.map((r, i) => `<button type="button" data-rule="${i}">${esc(r[0])}</button>`).join("");
+  document.querySelectorAll("[data-rule]").forEach((b) => b.addEventListener("click", () => {
+    const p = settledShift(), e = RULES[+b.dataset.rule][1](p);
+    $("ruleOut").innerHTML = `<h3 style="margin-top:12px">${esc(RULES[+b.dataset.rule][0])}</h3><div class="card"><div class="path" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:.82rem"><span class="chip">${esc(e.method)} ${esc(e.path)}</span><span class="pill ${e.status >= 400 ? "bad" : "ok"}">${e.status}${e.response.code ? " · " + esc(e.response.code) : ""}</span></div>${Object.keys(e.body).length ? `<pre style="margin:8px 0">${pretty(e.body)}</pre>` : ""}<div class="result ${e.status >= 400 ? "bad" : "ok"}">${esc(e.response.detail || JSON.stringify(e.response))}</div><p class="why" style="margin:8px 0 0">Rows written: <b>${e.writes.length}</b>. Router <code>${esc(e.router)}</code> → <code>${esc(e.service)}</code>.</p></div>`;
   }));
-  $("restore").addEventListener("click", () => { view = null; highlight = null; $("attackResult").innerHTML = ""; $("restore").hidden = true; renderLedger(); });
 
-  $("runTests").addEventListener("click", async () => {
-    const t0 = performance.now();
-    const r = await LedgerTests.run();
-    $("testSummary").textContent = `${r.filter((x) => x.pass).length} of ${r.length} passed in ${Math.round(performance.now() - t0)} ms`;
-    $("testOut").innerHTML = r.map((x) => `<li><span class="pill ${x.pass ? "ok" : "bad"}">${x.pass ? "pass" : "fail"}</span><span>${esc(x.name)}${x.error ? ` <span class="why">${esc(x.error)}</span>` : ""}</span></li>`).join("");
+  // ================= 5. tests =================
+  $("runTests").addEventListener("click", () => {
+    const r = PosTests.run();
+    $("testOut").innerHTML = r.map((t) => `<li><span class="pill ${t.pass ? "ok" : "bad"}">${t.pass ? "pass" : "fail"}</span><span>${esc(t.name)}${t.error ? ` <span class="muted">· ${esc(t.error)}</span>` : ""}</span></li>`).join("");
+    $("testSummary").textContent = `${r.filter((t) => t.pass).length} of ${r.length} passed`;
   });
-
-  reset();
 })();
 </script>
 </body>
