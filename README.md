@@ -2,7 +2,7 @@
 
 **Live:** https://kaihuan-huang.github.io/ledger-demo/
 
-A restaurant point-of-sale platform you can operate in the browser, modelled on the POS work I led at [IPOT](https://ipot.food/), a team-built platform. All data is synthetic.
+A restaurant point-of-sale platform you can operate in the browser, modelled on the POS work I led at [IPOT](https://ipot.food/), a team-built platform, and styled with IPOT's own design tokens (brand red rgb(193,32,48) and its tints, warm neutrals, 12–15px radii, the flame wordmark). IPOT's licensed typefaces are stood in for by Archivo Black and Inter from Google Fonts. All data is synthetic.
 
 - **Run the restaurant:** a cashier terminal (floor plan, order tiles, ticket, payment with tip and tender, refund, void), a kitchen display fed over WebSocket rooms, and the guest's phone on the seated table. Every tap is a request through Router → Service → Model, one transaction each, and the backend trace shows the exact rows it wrote. A 40-second tour plays the whole shift.
 - **Talk to Nalu:** the bilingual guest assistant at the edge. Rules classify the intent and read every field; a booking runs only after a bare "yes", as one `POST` to the in-page Reservation API with an `Idempotency-Key` (a retry replays, a different payload gets 409, a full slot gets 409 and other times). Twilio delivery status arrives by callback; the Revenue Agent gets the attribution. Nalu reads the POS read-only, and a refund is a proposal until a manager approves it on the terminal. An agent tour plays the whole flow.
