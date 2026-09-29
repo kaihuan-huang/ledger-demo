@@ -1,7 +1,10 @@
 /* Nalu demo agent: bilingual guest assistant. Rules classify the intent and read every field; the
    booking gate is a bare "yes"; every tool is an HTTP request into the POS (read-only) or the
    Reservation API. Refunds are proposals until a manager approves them on the terminal.
-   Zero model calls in this demo, which is the production booking path. All data is synthetic. */
+   In production the model is qwen2.5:7b served by Ollama on the restaurant's own GPU box; here it is
+   off unless you connect a local Ollama. When it is on, it gets one call per turn to classify the intent
+   and fill fields the rules missed, and every value it returns is re-validated before it is used
+   (the 230ce19 rule: the model proposes, the code decides). All data is synthetic. */
 (function (root) {
   "use strict";
   const B = root.BookingAgent, { money } = root.POS;
@@ -80,19 +83,103 @@
     return null;
   }
 
+  const INTENTS = ["menu_question", "pricing_question", "availability_question", "hours_question", "bill_request", "reservation_create", "reservation_action_unsupported", "refund_request", "guest_request:call", "guest_request:cash", "general"];
+  function extractionMessages(userTurns, now) {
+    const pad = (n) => String(n).padStart(2, "0");
+    const system = [
+      "You read messages from a restaurant guest. Reply with JSON only, no prose.",
+      `Today is ${now.toISOString().slice(0, 10)}; the current time is ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}.`,
+      `{"intent": one of ${JSON.stringify(INTENTS)}, "party_size": integer or null, "date": "YYYY-MM-DD" or null, "time": "HH:MM" 24h or null, "name": string or null}`,
+      "Use null for anything the guest has not stated. Never guess.",
+    ].join("\n");
+    return [{ role: "system", content: system }, { role: "user", content: userTurns.map((u, i) => `Guest message ${i + 1}: ${u}`).join("\n") }];
+  }
+  // Talks to a local Ollama. Bounded like production: one call per turn, ~150 output tokens, 10 s, invalid JSON = no result.
+  class LocalModel {
+    constructor(endpoint, model) { this.endpoint = (endpoint || "http://localhost:11434").replace(/\/$/, ""); this.model = model || "qwen2.5:7b"; this.calls = 0; this.failures = 0; this.lastMs = null; }
+    async extract(userTurns, now) {
+      const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 10000), t0 = Date.now();
+      this.calls += 1;
+      try {
+        const res = await fetch(`${this.endpoint}/api/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, signal: ctl.signal,
+          body: JSON.stringify({ model: this.model, messages: extractionMessages(userTurns, now), stream: false, format: "json", options: { temperature: 0, num_predict: 160 } }) });
+        if (!res.ok) throw new Error(`Ollama answered ${res.status}`);
+        const data = await res.json();
+        this.lastMs = Date.now() - t0;
+        try { return { ok: true, ms: this.lastMs, value: JSON.parse(data.message.content) }; } catch (e) { this.failures += 1; return { ok: false, ms: this.lastMs, error: "invalid JSON" }; }
+      } catch (e) { this.failures += 1; this.lastMs = Date.now() - t0; return { ok: false, ms: this.lastMs, error: e.name === "AbortError" ? "timed out after 10 s" : e.message }; }
+      finally { clearTimeout(timer); }
+    }
+  }
+  // Re-validation of model output. A value is used only if the rules found nothing for that field and it survives these checks.
+  function revalidate(llm, text, ruleFields, now) {
+    const out = { accepted: {}, rejected: {} };
+    if (!llm || typeof llm !== "object") return out;
+    const today = now.toISOString().slice(0, 10);
+    const cand = { party: llm.party_size, date: llm.date, time: llm.time, name: llm.name };
+    for (const k of Object.keys(cand)) {
+      let v = cand[k];
+      if (v === null || v === undefined || v === "") continue;
+      if (ruleFields[k] != null) { out.rejected[k] = "rules already had a value"; continue; }
+      let why = null;
+      if (k === "party") { v = Number(v); if (!Number.isInteger(v) || v < 1 || v > 20) why = "not 1–20"; }
+      else if (k === "date") { if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v))) why = "not YYYY-MM-DD"; else if (String(v) < today) why = "in the past"; }
+      else if (k === "time") {
+        if (!/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(v))) why = "not HH:MM";
+        else {
+          const h24 = parseInt(String(v).split(":")[0], 10), h12 = ((h24 + 11) % 12) + 1;
+          const zh = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "十一", "十二"];
+          const nums = (text.match(/\d+/g) || []).map(Number);
+          const said = nums.includes(h24) || nums.includes(h12) || text.includes(zh[h12] + "点") || text.includes(zh[h24] + "点") || (h12 === 12 && /noon|中午/i.test(text));
+          if (!said) why = `hour ${h24} is not in the guest's words`;
+        }
+      }
+      else if (k === "name") { const n = String(v).trim(); if (n.length < 1 || n.length > 40) why = "bad length"; else if (!text.toLowerCase().includes(n.toLowerCase())) why = "not in the guest's words"; else if (/^(i|me|table|tomorrow|today|tonight|yes|no)$/i.test(n)) why = "not a name"; else v = n; }
+      if (why) out.rejected[k] = `${JSON.stringify(cand[k])}: ${why}`; else out.accepted[k] = v;
+    }
+    return out;
+  }
+
   class Nalu {
     constructor({ pos, reservations, guest }) {
       this.pos = pos; this.res = reservations; this.guest = guest;
       this.booking = B.initialState(); this.idemSeq = 0; this.idemKey = null; this.lastBooking = null;
       this.proposals = []; this.turns = [];
+      this.model = null; this.modelCalls = 0;
+    }
+    connectModel(model) { this.model = model; }
+
+    // The model-assisted turn: one bounded call, then the same deterministic path with the model's
+    // output used only where the rules found nothing and the value re-validates.
+    async handleAsync(text, extract) {
+      const fn = extract || (this.model ? (turns, now) => this.model.extract(turns, now) : null);
+      if (!fn) return this.handle(text);
+      const userTurns = this.turns.filter((t) => t.text != null).slice(-2).map((t) => t.text).concat([text]);
+      this.modelCalls += 1;
+      const r = await fn(userTurns, this.now());
+      const hint = { raw: r.ok ? r.value : null, ms: r.ms, error: r.ok ? null : r.error, intentUsed: false, accepted: {}, rejected: {}, verdicts: [] };
+      const out = this.handle(text, hint);
+      out.model = hint;
+      this.turns[this.turns.length - 1].model = hint;
+      return out;
     }
     now() { return new Date(this.pos.now()); }
     call(service, method, path, body, headers) { return service.request(method, path, body, "nalu", headers); }
 
-    handle(text) {
+    handle(text, hint) {
       const lang = CJK.test(text) ? "zh" : "en", t = T[lang];
       const mid = this.booking.awaitingConfirm || Object.values(this.booking.fields).some(Boolean);
-      const intent = classify(text, mid, this.now());
+      let intent = classify(text, false, this.now());
+      // A keyword match wins. Where the rules only fall back (mid-booking, or nothing matched), the model's intent may fill in.
+      if (intent === "general") {
+        // Mid-booking, a short message ("yes", "ok", "8pm", "确认") is part of the booking whatever the model thinks; the gate is not the model's to reopen.
+        const short = CJK.test(text) ? text.replace(/[\s，。！？,.!?]/g, "").length < 4 : text.trim().split(/\s+/).length < 3;
+        const carries = mid && Object.values(B.resolveAll(text, this.now())).some(Boolean);
+        const modelIntent = hint && hint.raw && INTENTS.includes(hint.raw.intent) && hint.raw.intent !== "general" ? hint.raw.intent : null;
+        if (modelIntent && !(mid && (short || carries || modelIntent === "reservation_create"))) { intent = modelIntent; hint.intentUsed = true; }
+        else if (mid) intent = "reservation_create";
+      }
+      if (hint) this._hint = hint;
       const out = { intent, lang, reply: "", tools: [], fields: null };
       const g = this.guest();
       const say = (s) => { out.reply = out.reply ? `${out.reply} ${s}` : s; };
@@ -115,16 +202,29 @@
       } else if (intent === "refund_request") this.refund(text, g, t, out, tool, say);
       else if (intent === "reservation_create") this.book(text, g, t, lang, out, tool, say);
       else say(t.general);
+      this._hint = null;
       this.turns.push({ text, ...out });
       return out;
     }
 
     book(text, g, t, lang, out, tool, say) {
-      const r = B.step(this.booking, text, this.now());
+      let r = B.step(this.booking, text, this.now());
+      out.fields = r.trace;
+      const hint = this._hint;
+      if (hint && hint.raw && !r.toolCalls.length) {
+        hint.verdicts = B.compare(hint.raw, r.state);
+        const v = revalidate(hint.raw, text, r.state.fields, this.now());
+        Object.assign(hint, { accepted: v.accepted, rejected: v.rejected });
+        if (Object.keys(v.accepted).length) {
+          const st = JSON.parse(JSON.stringify(r.state));
+          for (const [k, val] of Object.entries(v.accepted)) { st.fields[k] = val; out.fields.push({ field: k, value: val, from: "local model, re-validated" }); }
+          st.awaitingConfirm = false;
+          r = { ...B.step(st, "", this.now()), trace: out.fields };
+        }
+      }
       const changed = JSON.stringify(r.state.fields) !== JSON.stringify(this.booking.fields);
       if (changed || !this.idemKey) this.idemKey = `nalu-${g && g.session_id ? g.session_id : "web"}-${++this.idemSeq}`;
       this.booking = r.state;
-      out.fields = r.trace;
       const create = r.toolCalls.find((c) => c.name === "create_reservation");
       if (!create) { say(r.reply); return; }
       const a = create.args;
@@ -182,5 +282,5 @@
       return e;
     }
   }
-  root.NALU = { Nalu, classify, MANAGER_OVER_CENTS, RESTAURANT_PHONE };
+  root.NALU = { Nalu, LocalModel, classify, revalidate, extractionMessages, INTENTS, MANAGER_OVER_CENTS, RESTAURANT_PHONE };
 })(typeof globalThis !== "undefined" ? globalThis : this);

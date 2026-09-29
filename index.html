@@ -196,7 +196,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
 
   <section aria-labelledby="agent">
     <h2 id="agent">2. Talk to Nalu, the guest assistant</h2>
-    <p class="muted">Nalu is the bilingual (EN / 中文) assistant at the edge of the platform. Rules classify the intent and read every field; the booking runs only after a bare “yes”; every tool is an HTTP request into the POS (read-only) or the Reservation API, with an <code>Idempotency-Key</code> on the write. A refund is a proposal until a manager approves it on the terminal. This page makes zero model calls, which is exactly the production booking path: the model proposes, the code decides.</p>
+    <p class="muted">Nalu is the bilingual (EN / 中文) assistant at the edge of the platform. Rules classify the intent and read every field; the booking runs only after a bare “yes”; every tool is an HTTP request into the POS (read-only) or the Reservation API, with an <code>Idempotency-Key</code> on the write. A refund is a proposal until a manager approves it on the terminal. In production the model is <code>qwen2.5:7b</code> served by Ollama on the restaurant's own GPU box, so guest messages never leave the network; it gets at most one call per turn, to classify the intent and fill fields the rules missed, and every value it returns is re-validated before it is used. Here the model is off until you connect a local Ollama below; the rules alone carry the whole flow.</p>
     <div class="tourbar"><button type="button" class="primary" id="tour2">Play the agent tour</button><button type="button" id="stopTour2" hidden>Stop</button><span class="caption" id="caption2"></span></div>
     <div class="nalu">
       <div class="chat" id="chat"></div>
@@ -209,7 +209,15 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
             <li><b>Book through the Reservation API:</b> <code>POST /api/v1/reservations</code> with an <code>Idempotency-Key</code>, after a bare yes. A full slot comes back 409 and the agent offers open times.</li>
             <li><b>Propose a refund, never move money:</b> the proposal passes the same checks the refund endpoint applies, then waits on the terminal's Requests tab. Over $50 needs a manager.</li>
             <li><b>Never overclaim:</b> replies about refunds and bookings are fixed templates; the code, not the model, decides what the reply may say.</li>
+            <li><b>The model, when connected:</b> one bounded call per turn (about 150 output tokens, 10 s timeout, invalid JSON counts as no result). Its intent is used only where the rules matched nothing; its fields only where the rules found nothing, and only if they survive re-validation against the guest's own words.</li>
           </ul></div>
+        <div class="card" style="margin-top:12px" id="modelCard"><h4>Local model · off</h4>
+          <p class="why" style="margin:0 0 8px">Nalu's model runs on the restaurant's NVIDIA DGX Spark through Ollama: about 47 tokens/s warm, about 10 s on a cold first call, requests served one after another. Nothing is sent to a cloud API. The flag <code>CUSTOMER_CHAT_USE_LLM</code> ships off; the deterministic path is what the guest gets when it is off or the model fails. If you run <a href="https://ollama.com">Ollama</a>, connect it and watch the model's reading next to the rules. Nothing leaves your computer.</p>
+          <pre style="margin-bottom:8px"><span class="muted"># once, then restart Ollama</span>
+ollama pull qwen2.5:7b
+OLLAMA_ORIGINS="https://kaihuan-huang.github.io" ollama serve</pre>
+          <div class="row" style="margin:0"><input type="text" id="mEndpoint" value="http://localhost:11434" aria-label="Ollama address" style="width:190px"><input type="text" id="mModel" value="qwen2.5:7b" aria-label="Model" style="width:120px"><button type="button" class="primary" id="mConnect">Connect</button><span class="muted" id="mStatus"></span></div>
+        </div>
       </div>
     </div>
   </section>
@@ -282,7 +290,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
         <tr><td>Guests</td><td>Guest-request inbox with dedupe and a 3-minute SLA <span class="muted">(392e5ac)</span>; QR ordering flow with payment step; phone sign-in</td><td>QR app shell, menus, i18n</td></tr>
         <tr><td>Floor and staff</td><td>Table triage with Postgres persistence <span class="muted">(97c8270)</span>; scheduling and availability <span class="muted">(0975dec)</span>; cashier rota</td><td>Floor plan, table model, iOS station</td></tr>
         <tr><td>Delivery</td><td>iOS API contract answering the station's 11 asks <span class="muted">(e520b80)</span>; staging CI; diverged Alembic heads repaired; a long-red test suite brought back to green <span class="muted">(7fc408c)</span></td><td>MVP, Docker stack, deployment</td></tr>
-        <tr><td>Neighbours</td><td>Reservation API from the first commit, in production; Nalu booking flow v2 (pre-launch); the decision to move the AI assistant out of the POS process</td><td>Nalu scaffold, read-only POS grounding</td></tr>
+        <tr><td>Neighbours</td><td>Reservation API from the first commit, in production; Nalu booking flow v2 (pre-launch)</td><td>Nalu as a separate service: scaffold, read-only POS grounding</td></tr>
       </tbody>
     </table></div>
     <p class="why" style="margin-top:10px">Not shown here and not claimed: real card capture (simulated on the main branch), receipt printing, production deployment. For the tamper-evident audit trail behind these events, see the <a href="ledger.html">ledger page</a>.</p>
@@ -312,7 +320,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
   const VOID_REASONS = ["guests left before the food", "duplicate bill", "entered on the wrong table"];
   const REFUND_REASONS = ["item arrived cold", "wrong dish served", "guest complaint"];
   const GUEST_PHONE = "+14155550100", GUEST_UTM = { source: "google", campaign: "hotpot-sf", gclid: "CjJ7x" };
-  let pos, res, nalu, sel, tab, cat, cart, pay, refund, voidReason, traceSeen, tourRunning = false;
+  let pos, res, nalu, sel, tab, cat, cart, pay, refund, voidReason, traceSeen, tourRunning = false, localModel = null;
   function guestCtx() {
     const t = phoneTable();
     if (!t) return { session_id: null, table_id: null, order_id: null, paid_order_id: null, phone: GUEST_PHONE, utm: GUEST_UTM };
@@ -321,7 +329,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     return { session_id: s && s.is_active ? s.id : null, table_id: t.id, order_id: open ? open.id : null, paid_order_id: paid ? paid.id : null, phone: GUEST_PHONE, utm: GUEST_UTM };
   }
   function resetState() {
-    pos = new Pos(); res = new RESERVATIONS.Reservations(pos.bus); nalu = new NALU.Nalu({ pos, reservations: res, guest: guestCtx });
+    pos = new Pos(); res = new RESERVATIONS.Reservations(pos.bus); nalu = new NALU.Nalu({ pos, reservations: res, guest: guestCtx }); nalu.connectModel(localModel);
     sel = null; tab = "tables"; cat = "Sets"; cart = {}; traceSeen = 0;
     pay = { method: "cash", tipPct: 18, tipCustom: null, tendered: null };
     refund = { amount: "", reason: REFUND_REASONS[0] }; voidReason = VOID_REASONS[0];
@@ -447,6 +455,8 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
   const ROLE_OF = { term: "cashier", kds: "kitchen", phone: "guest", manager: "manager" };
   function renderTrace() {
     const list = $("traceList"), entries = pos.log.slice(traceSeen);
+    const nres = pos.log.filter((e) => e.service_name === "Reservation API").length;
+    $("traceCount").textContent = `${pos.log.length} request${pos.log.length === 1 ? "" : "s"}${nres ? ` · ${nres} to the Reservation API` : ""} · ${nalu.modelCalls} model call${nalu.modelCalls === 1 ? "" : "s"}${localModel ? ` (local ${localModel.model})` : ""}`;
     if (!entries.length) return;
     if (traceSeen === 0) list.innerHTML = "";
     document.querySelectorAll(".tr.new").forEach((d) => d.classList.remove("new"));
@@ -463,8 +473,6 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
       list.prepend(d);
     }
     traceSeen = pos.log.length;
-    const nres = pos.log.filter((e) => e.service_name === "Reservation API").length;
-    $("traceCount").textContent = `${pos.log.length} request${pos.log.length === 1 ? "" : "s"}${nres ? ` · ${nres} to the Reservation API` : ""} · 0 model calls`;
     const c = pos.checks(), bad = c.filter((x) => !x.ok).length;
     $("checkLine").innerHTML = c.length ? `${c.length} invariants recomputed from the rows after every request: <span class="pill ${bad ? "bad" : "ok"}">${bad ? bad + " broken" : "all hold"}</span> <span class="muted">(bill totals from price snapshots, tips only from captured payments, refunds never above what was charged, cash drawer equals cash in minus cash out, closed bills fully paid and off their table)</span>` : "";
   }
@@ -481,10 +489,38 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     const trace = last && last.fields && last.fields.length ? `<p class="why" style="margin:6px 0 0">Read from the last message: ${last.fields.map((x) => `<span class="chip">${esc(x.field)} = ${esc(x.value)} ← “${esc(x.from)}”</span>`).join(" ")}</p>` : "";
     const props = nalu.proposals.length ? `<h4 style="margin-top:12px">Refund proposals</h4><div class="kv">${nalu.proposals.map((x) => `<div><span>#${x.id} ${money(x.amount_cents)}</span><span><span class="pill ${x.status === "refunded" ? "ok" : x.status === "queued" ? "warn" : "bad"}">${esc(x.status)}</span> ${esc(x.blocked_reason || (x.status === "queued" ? "waiting for a manager on the terminal" : ""))}</span></div>`).join("")}</div>` : "";
     $("agentState").innerHTML = `<h4>Agent state · deterministic path</h4>
-      <div class="kv"><div><span>last intent</span><span>${last ? `<span class="chip">${esc(last.intent)}</span>` : '<span class="muted">—</span>'}</span></div><div><span>language</span><span>${last ? esc(last.lang) : "—"}</span></div><div><span>booking gate</span><span>${b.awaitingConfirm ? '<span class="pill warn">waiting for a bare yes</span>' : '<span class="muted">closed</span>'}</span></div><div><span>Idempotency-Key</span><span style="font-family:var(--mono);font-size:.78rem">${nalu.idemKey ? esc(nalu.idemKey) : "—"}</span></div><div><span>model calls</span><span>0</span></div></div>
+      <div class="kv"><div><span>last intent</span><span>${last ? `<span class="chip">${esc(last.intent)}</span>` : '<span class="muted">—</span>'}</span></div><div><span>language</span><span>${last ? esc(last.lang) : "—"}</span></div><div><span>booking gate</span><span>${b.awaitingConfirm ? '<span class="pill warn">waiting for a bare yes</span>' : '<span class="muted">closed</span>'}</span></div><div><span>Idempotency-Key</span><span style="font-family:var(--mono);font-size:.78rem">${nalu.idemKey ? esc(nalu.idemKey) : "—"}</span></div><div><span>model calls</span><span>${nalu.modelCalls}${localModel ? ` · local ${esc(localModel.model)} · ${localModel.failures} failed` : " · model off"}</span></div></div>${modelReadout(last)}
       <h4 style="margin-top:12px">Booking fields (rules only)</h4><div class="kv">${fields}</div>${trace}${props}`;
   }
-  function chatSay(text) { if (!text || !text.trim()) return null; flash("chat"); const o = nalu.handle(text.trim()); renderAll(); return o; }
+  function modelReadout(last) {
+    if (!last || !last.model) return "";
+    const m = last.model;
+    if (m.error) return `<h4 style="margin-top:12px">Local model · ${m.ms} ms</h4><p class="why" style="margin:0">No result: ${esc(m.error)}. The rules answered alone.</p>`;
+    const verdicts = (m.verdicts || []).map((v) => `<div><span>${esc(v.field)}</span><span>${v.llm == null ? '<span class="muted">null</span>' : esc(v.llm)} <span class="pill ${/matches|agree/.test(v.verdict) ? "ok" : /missed/.test(v.verdict) ? "warn" : "bad"}">${esc(m.accepted && m.accepted[v.field] != null ? "used after re-validation" : v.verdict)}</span>${m.rejected && m.rejected[v.field] ? ` <span class="muted">${esc(m.rejected[v.field])}</span>` : ""}</span></div>`).join("");
+    return `<h4 style="margin-top:12px">Local model · ${m.ms} ms · what it read</h4><div class="kv"><div><span>intent</span><span>${esc(m.raw.intent || "null")} <span class="pill ${m.intentUsed ? "ok" : "info"}">${m.intentUsed ? "used: rules matched nothing" : "ignored: rules matched"}</span></span></div>${verdicts}</div>`;
+  }
+  let pending = false;
+  async function chatSay(text) {
+    if (!text || !text.trim() || pending) return null;
+    flash("chat");
+    if (!nalu.model) { const o = nalu.handle(text.trim()); renderAll(); return o; }
+    pending = true;
+    nalu.turns.push({ text: text.trim(), intent: "pending", lang: "en", reply: "…", tools: [] }); renderChat();
+    nalu.turns.pop();
+    try { const o = await nalu.handleAsync(text.trim()); renderAll(); return o; } finally { pending = false; renderAll(); }
+  }
+  $("mConnect").addEventListener("click", async () => {
+    if (localModel) { localModel = null; nalu.connectModel(null); $("mConnect").textContent = "Connect"; $("mStatus").textContent = "Model off; rules only."; $("modelCard").querySelector("h4").textContent = "Local model · off"; renderAll(); return; }
+    const endpoint = $("mEndpoint").value.trim().replace(/\/$/, ""), model = $("mModel").value.trim();
+    $("mStatus").textContent = "Checking…";
+    try {
+      const r = await fetch(`${endpoint}/api/tags`); if (!r.ok) throw new Error(`Ollama answered ${r.status}`);
+      const tags = await r.json(); if (!(tags.models || []).some((x) => x.name === model || x.name === model + ":latest")) throw new Error(`"${model}" is not pulled. Run: ollama pull ${model}`);
+      localModel = new NALU.LocalModel(endpoint, model); nalu.connectModel(localModel);
+      $("mConnect").textContent = "Disconnect"; $("mStatus").textContent = `Connected. One call per turn; the first may take a few seconds while the model loads.`; $("modelCard").querySelector("h4").textContent = `Local model · ${model} · on`;
+    } catch (e) { $("mStatus").textContent = /fetch/i.test(e.message) ? `Couldn't reach ${endpoint}. Start Ollama with OLLAMA_ORIGINS set as shown, and allow local network access if the browser asks.` : e.message; }
+    renderAll();
+  });
   $("chat").addEventListener("submit", (ev) => { ev.preventDefault(); const v = $("chatIn").value; chatSay(v); });
   $("chat").addEventListener("click", (ev) => { const c = ev.target.closest("[data-chip]"); if (c) chatSay(c.dataset.chip); });
   document.querySelectorAll("[data-show]").forEach((b) => b.addEventListener("click", () => {
@@ -582,7 +618,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     tourRunning = true; const token = ++tourToken;
     $("tour").hidden = true; $("stopTour").hidden = false;
     const say = (s) => { $("caption").textContent = s; };
-    const step = async (cap, fn, ms) => { if (token !== tourToken) throw new Error("stopped"); say(cap); fn(); await sleep(ms || 1300); };
+    const step = async (cap, fn, ms) => { if (token !== tourToken) throw new Error("stopped"); say(cap); const r = fn(); if (r && r.then) await r; await sleep(ms || 1300); };
     try {
       await step("Seat a party of three at T3.", () => { sel = 3; tab = "tables"; renderAll(); flash("term"); }, 900);
       await step("Seat a party of three at T3.", () => seat(3));
@@ -623,7 +659,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     tourRunning = true; const token = ++tourToken;
     $("tour2").hidden = true; $("stopTour2").hidden = false;
     const say = (s) => { $("caption2").textContent = s; };
-    const step = async (cap, fn, ms) => { if (token !== tourToken) throw new Error("stopped"); say(cap); fn(); await sleep(ms || 1500); };
+    const step = async (cap, fn, ms) => { if (token !== tourToken) throw new Error("stopped"); say(cap); const r = fn(); if (r && r.then) await r; await sleep(ms || 1500); };
     try {
       await step("A guest asks Nalu about the menu. The answer is grounded on a read-only call to the POS.", () => chatSay("What's on the menu?"));
       await step("Availability comes from the Reservation API's slot table, not from the model.", () => chatSay("What times are available tonight?"));
@@ -633,7 +669,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
       await step("Bare yes: one POST to the Reservation API with an Idempotency-Key. Twilio queues the SMS, the Revenue Agent gets the attribution.", () => chatSay("yes"), 2000);
       await step("The phone's network retries the same request. Same key, same payload: the API replays the booking and writes nothing.", () => { flash("chat"); nalu.retryLastBooking(); renderAll(); }, 1800);
       await step("Twilio calls back with the delivery status; the API records it rather than guessing.", () => twilioDeliver(), 1500);
-      await step("The host confirms the booking on the terminal's Bookings tab.", () => { tab = "bookings"; renderTerm(); flash("term"); }, 1100);
+      await step("The host confirms the booking on the terminal's Bookings tab.", () => { if (!res.db.reservations.length) { nalu.handle("Table for 4 tonight at 8pm, under Kai"); nalu.handle("yes"); } tab = "bookings"; renderAll(); flash("term"); }, 1100);
       await step("The host confirms the booking on the terminal's Bookings tab.", () => confirmBooking(res.db.reservations[0].code), 1300);
       await step("The host reserves T6 for it. On the POS floor the table now carries the reservation code.", () => reserveTable(6, res.db.reservations[0].code, res.db.reservations[0].reservation_time), 1500);
       await step("8 PM: the party arrives. Seating T6 needs the code, and the bill will carry it.", () => seat(4, res.db.reservations[0].code), 1300);
@@ -645,7 +681,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
       await step("A manager sees the proposal on the Requests tab. Approval is the only path that moves money, through the same refund endpoint.", () => { tab = "requests"; renderTerm(); flash("term"); }, 1300);
       await step("Approved: the refund lands with the manager as approver, and Nalu tells the guest with a fixed template.", () => approveProposal(1), 1800);
       await step("An unsupported action: Nalu says what it cannot do and gives the real phone number from config, never from the model.", () => chatSay("Cancel my reservation"), 1800);
-      say("Done. Every agent action above is in the trace, tagged POS API or Reservation API, and the model was never called.");
+      say(localModel ? "Done. Every agent action is in the trace; the local model was consulted once per turn and every value it gave was re-validated." : "Done. Every agent action above is in the trace, tagged POS API or Reservation API. The rules carried the whole flow; connect a local Ollama to watch the model alongside them.");
     } catch (e) { if (e.message !== "stopped") throw e; }
     if (token === tourToken) { tourRunning = false; $("tour2").hidden = false; $("stopTour2").hidden = true; }
     flash(null);
@@ -680,7 +716,7 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
     models: ["Models (SQLAlchemy + Alembic)", "Columns that carry the rules: order_items.price and tax_rate are snapshots taken when the line is ordered; order_items.kds_ticket_id links a line to the round it went out on; payments carry the tip and refunded_amount; orders carry voided_by, void_reason, reopened_by, refund_status. During the May merge storm I repaired diverged Alembic heads four times and added a migration safety checklist.", "Schema changes go through Alembic; the POS repo is the single owner."],
     postgres: ["PostgreSQL", "One database for the POS. Queries are a mix of legacy db.query() and SQLAlchemy 2.0 select(); the rule is that new code uses select() and touched modules are converted one at a time rather than in a mass refactor.", "Team-built Docker stack; I added the staging deploy workflow."],
     reservation: ["Reservation API", "A separate FastAPI service I built from the first commit (64 of 79 commits): time-slot capacity, Twilio Verify OTP, confirmation SMS with self-service reschedule and cancel links, delivery-status callbacks, guest check-in with early and late approval, loyalty, a staff portal, UTM attribution with a callback to the marketing system. In production with real guests.", "Kept out of the POS on purpose: a booking's lifecycle has nothing to do with a bill's, and the POS was mid-merge-storm at the time."],
-    nalu: ["Nalu guest assistant", "Bilingual chat for hours, menu and reservations. It reads the POS read-only and books only through the Reservation API; the booking path makes zero model calls after I measured the LLM-only pilot at 57% fully correct. I moved the assistant out of the POS process: one process meant shared deploys, keys and failure surface.", "Boundary: no POS ORM imports, no POS write methods, guest tokens never stored or sent to inference."],
+    nalu: ["Nalu guest assistant", "Bilingual chat for hours, menu and reservations. It reads the POS read-only and books only through the Reservation API; the booking path makes zero model calls after I measured the LLM-only pilot at 57% fully correct. The model itself, qwen2.5:7b, runs locally on the restaurant's GPU box through Ollama. Nalu runs as its own service beside the POS (a teammate's scaffold); I rebuilt its booking flow.", "Boundary: no POS ORM imports, no POS write methods, guest tokens never stored or sent to inference."],
   };
   (function drawDiagram() {
     const s = ['<svg viewBox="0 0 950 350" role="img" aria-label="Architecture: five clients call the POS API, which is three layers over PostgreSQL; the Reservation API and Nalu sit beside it.">',
@@ -759,8 +795,8 @@ footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-si
   }));
 
   // ================= 5. tests =================
-  $("runTests").addEventListener("click", () => {
-    const r = PosTests.run();
+  $("runTests").addEventListener("click", async () => {
+    const r = await PosTests.runAsync();
     $("testOut").innerHTML = r.map((t) => `<li><span class="pill ${t.pass ? "ok" : "bad"}">${t.pass ? "pass" : "fail"}</span><span>${esc(t.name)}${t.error ? ` <span class="muted">· ${esc(t.error)}</span>` : ""}</span></li>`).join("");
     $("testSummary").textContent = `${r.filter((t) => t.pass).length} of ${r.length} passed`;
   });

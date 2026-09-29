@@ -276,8 +276,71 @@
     }],
   );
 
+  tests.push(
+    ["Local model: a value it invents is rejected, a value the rules missed is used only after re-validation, and its intent is only a fallback", () => {
+      const { nalu, res } = agentWorld();
+      // The fake model returns what qwen2.5:7b did in the pilot: a name lifted from nowhere, plus a plausible time.
+      const fake = async () => ({ ok: true, ms: 12, value: { intent: "reservation_create", party_size: 4, date: "2026-09-14", time: "20:00", name: "Lisa" } });
+      let done = false;
+      nalu.handleAsync("Could we get a table for four this evening, around 8?", fake).then((o) => {
+        eq(o.model.rejected.name, '"Lisa": not in the guest\'s words', "invented name rejected");
+        eq(o.model.rejected.party, "rules already had a value", "rules win when they have a value");
+        eq(nalu.booking.fields.time, "20:00", "time the rules missed was filled by the model after re-validation");
+        eq(nalu.booking.fields.name, null, "name still missing");
+        assert(o.fields.some((f) => f.from === "local model, re-validated"), "source is recorded");
+        assert(/name/i.test(o.reply), "asks for the name");
+        return nalu.handleAsync("under Kai", fake);
+      }).then((o) => {
+        eq(nalu.booking.fields.name, "Kai", "name from the rules");
+        assert(nalu.booking.awaitingConfirm, "gate open");
+        const bad = async () => ({ ok: true, ms: 5, value: { intent: "reservation_create", party_size: 4, date: "2026-09-14", time: "20:00", name: "Kai" } });
+        return nalu.handleAsync("yes", bad);
+      }).then((o) => {
+        eq(o.tools[0].entry.status, 201, "booked on the bare yes"); eq(res.db.reservations[0].guest_name, "Kai", "name");
+        const fallback = async () => ({ ok: true, ms: 5, value: { intent: "hours_question", party_size: null, date: null, time: null, name: null } });
+        return nalu.handleAsync("when do you guys wrap up for the night?", fallback);
+      }).then((o) => {
+        eq(o.intent, "hours_question", "model intent used where the rules said general"); assert(o.model.intentUsed, "flagged");
+        const override = async () => ({ ok: true, ms: 5, value: { intent: "refund_request", party_size: null, date: null, time: null, name: null } });
+        return nalu.handleAsync("What's on the menu?", override);
+      }).then((o) => {
+        eq(o.intent, "menu_question", "a rule match is never overridden by the model"); assert(!o.model.intentUsed, "not flagged");
+        const broken = async () => ({ ok: false, ms: 10000, error: "timed out after 10 s" });
+        return nalu.handleAsync("Table for 2 tonight at 7pm, under Ana", broken);
+      }).then((o) => {
+        eq(o.model.error, "timed out after 10 s", "failure recorded"); assert(nalu.booking.awaitingConfirm, "rules alone still got there");
+        const menu = async () => ({ ok: true, ms: 5, value: { intent: "menu_question", party_size: null, date: null, time: null, name: null } });
+        return nalu.handleAsync("is there anything vegetarian?", menu);
+      }).then((o) => {
+        eq(o.intent, "menu_question", "a real question mid-booking may follow the model"); assert(nalu.booking.awaitingConfirm, "booking kept");
+        const menu = async () => ({ ok: true, ms: 5, value: { intent: "menu_question", party_size: null, date: null, time: null, name: null } });
+        return nalu.handleAsync("yes", menu);
+      }).then((o) => {
+        eq(o.intent, "reservation_create", "a bare yes mid-booking is the gate, whatever the model says"); eq(res.db.reservations.length, 2, "second booking made");
+        const avail = async () => ({ ok: true, ms: 5, value: { intent: "availability_question", party_size: null, date: null, time: null, name: null } });
+        return nalu.handleAsync("Table for 3 tomorrow at 7pm", avail).then(() => nalu.handleAsync("我叫 Kai", avail));
+      }).then((o) => {
+        eq(o.intent, "reservation_create", "a message carrying a booking field stays on the booking path"); eq(nalu.booking.fields.name, "Kai", "name taken");
+        done = true;
+      });
+      // The chain above is synchronous apart from the fake awaits; drain it.
+      return { async: true, check: () => done };
+    }],
+  );
+
   function run() {
     return tests.map(([name, fn]) => { try { fn(); return { name, pass: true }; } catch (e) { return { name, pass: false, error: e.message }; } });
   }
+  // Async-aware runner: awaits every test so promise chains report their own failures.
+  async function runAsync() {
+    const out = [];
+    for (const [name, fn] of tests) {
+      try { const r = fn(); if (r && r.async) { await new Promise((res) => setTimeout(res, 0)); for (let i = 0; i < 50 && !r.check(); i++) await new Promise((res) => setTimeout(res, 5)); if (!r.check()) throw new Error("async test did not finish"); } out.push({ name, pass: true }); }
+      catch (e) { out.push({ name, pass: false, error: e.message }); }
+    }
+    return out;
+  }
+  root.PosTests = { run, runAsync, count: tests.length };
+  return;
   root.PosTests = { run, count: tests.length };
 })(typeof globalThis !== "undefined" ? globalThis : this);
