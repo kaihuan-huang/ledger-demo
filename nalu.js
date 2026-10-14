@@ -1,7 +1,7 @@
 /* Nalu demo agent: bilingual guest assistant. Rules classify the intent and read every field; the
    booking gate is a bare "yes"; every tool is an HTTP request into the POS (read-only) or the
    Reservation API. Refunds are proposals until a manager approves them on the terminal.
-   In production the model is qwen2.5:7b served by Ollama on the restaurant's own GPU box; here it is
+   In pre-launch testing the model is qwen2.5:7b served by Ollama on the restaurant's own GPU box; here it is
    off unless you connect a local Ollama. When it is on, it gets one call per turn to classify the intent
    and fill fields the rules missed, and every value it returns is re-validated before it is used
    (the 230ce19 rule: the model proposes, the code decides). All data is synthetic. */
